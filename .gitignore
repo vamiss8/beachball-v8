@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# build output 
+client/dist/
+
+# go binaries 
+server/server/
+
+# env and os files 
+.env
+.DS_Store
