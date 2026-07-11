@@ -1,12 +1,14 @@
 # dependencies
 node_modules/
 
-# build output 
+# build outputs
 client/dist/
+server/server
+server/server.exe
 
-# go binaries 
-server/server/
-
-# env and os files 
+# environment
 .env
+
+# os files
 .DS_Store
+Thumbs.db
