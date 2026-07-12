@@ -69,10 +69,12 @@ function draw() {
 
     // draw entities if state is received
     if (serverState) {
-        // draw player
-        const p = serverState.player;
-        ctx.fillStyle = '#4caf50';
-        ctx.fillRect(p.pos.x, p.pos.y, p.width, p.height);
+        // draw all players
+        for (const id in serverState.players) {
+            const p = serverState.players[id];
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.pos.x, p.pos.y, p.width, p.height);
+        }
 
         // draw ball
         const b = serverState.ball;
