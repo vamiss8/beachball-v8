@@ -22,12 +22,22 @@ type Vector2 struct {
 	Y float64 `json:"y"`
 }
 
+type Inputs struct {
+	A bool `json:"a"`
+	D bool `json:"d"`
+	W bool `json:"w"`
+}
+
 type PlayerState struct {
+	Id        string  `json:"id"`
 	Pos       Vector2 `json:"pos"`
 	VelocityY float64 `json:"velocityY"`
 	IsJumping bool    `json:"isJumping"`
 	Width     float64 `json:"width"`
 	Height    float64 `json:"height"`
+	Color     string  `json:"color"`
+	Side      string  `json:"side"` // "left" or "right"
+	Inputs    Inputs  `json:"-"`    // hide inputs from json payload
 }
 
 type BallState struct {
@@ -36,22 +46,19 @@ type BallState struct {
 }
 
 type GameState struct {
-	Player PlayerState `json:"player"`
-	Ball   BallState   `json:"ball"`
+	Players map[string]*PlayerState `json:"players"` // changed to map of players
+	Ball    BallState               `json:"ball"`
 }
 
-// global state and mutex for thread safety
+// global state
 var (
 	state = GameState{
-		Player: PlayerState{Pos: Vector2{X: 100, Y: 0}, Width: 60, Height: 60},
-		Ball:   BallState{Pos: Vector2{X: 400, Y: 100}, Radius: 20},
+		Players: make(map[string]*PlayerState),
+		Ball:    BallState{Pos: Vector2{X: 400, Y: 100}, Radius: 20},
 	}
 	stateMutex sync.Mutex
-	
-	// simple input tracking for the current player
-	keys = struct {
-		A, D, W bool
-	}{}
+	clients    = make(map[*websocket.Conn]string) // track connections
+	nextID     = 1
 )
 
 // run physics loop at 60 fps
@@ -59,46 +66,60 @@ func gameLoop() {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
 
-	// constants (match frontend dimensions for now)
-	canvasWidth, canvasHeight := 800.0, 600.0 // we will handle dynamic resizing later
-	groundY := canvasHeight - 100.0 - state.Player.Height
+	canvasWidth, canvasHeight := 800.0, 600.0
 
 	for range ticker.C {
 		stateMutex.Lock()
 
-		// 1. player horizontal movement
-		speed := 7.0
-		if keys.A {
-			state.Player.Pos.X -= speed
-		}
-		if keys.D {
-			state.Player.Pos.X += speed
+		// 1. process all players
+		for _, p := range state.Players {
+			groundY := canvasHeight - 100.0 - p.Height
+			speed := 7.0
+
+			// horizontal movement
+			if p.Inputs.A {
+				p.Pos.X -= speed
+			}
+			if p.Inputs.D {
+				p.Pos.X += speed
+			}
+
+			// general canvas boundaries
+			if p.Pos.X < 0 {
+				p.Pos.X = 0
+			}
+			if p.Pos.X > canvasWidth-p.Width {
+				p.Pos.X = canvasWidth - p.Width
+			}
+
+			// net collision based on player side
+			if p.Side == "left" {
+				if p.Pos.X > canvasWidth/2-p.Width-5 {
+					p.Pos.X = canvasWidth/2 - p.Width - 5
+				}
+			} else {
+				if p.Pos.X < canvasWidth/2+5 {
+					p.Pos.X = canvasWidth/2 + 5
+				}
+			}
+
+			// vertical movement & gravity
+			if p.Inputs.W && !p.IsJumping {
+				p.VelocityY = -15
+				p.IsJumping = true
+			}
+
+			p.Pos.Y += p.VelocityY
+			p.VelocityY += 0.8 // gravity
+
+			if p.Pos.Y >= groundY {
+				p.Pos.Y = groundY
+				p.VelocityY = 0
+				p.IsJumping = false
+			}
 		}
 
-		// player boundaries
-		if state.Player.Pos.X < 0 {
-			state.Player.Pos.X = 0
-		}
-		if state.Player.Pos.X > canvasWidth/2-state.Player.Width-5 {
-			state.Player.Pos.X = canvasWidth/2 - state.Player.Width - 5
-		}
-
-		// 2. player vertical movement & gravity
-		if keys.W && !state.Player.IsJumping {
-			state.Player.VelocityY = -15
-			state.Player.IsJumping = true
-		}
-
-		state.Player.Pos.Y += state.Player.VelocityY
-		state.Player.VelocityY += 0.8 // gravity
-
-		if state.Player.Pos.Y >= groundY {
-			state.Player.Pos.Y = groundY
-			state.Player.VelocityY = 0
-			state.Player.IsJumping = false
-		}
-
-		// 3. simple ball gravity
+		// 2. simple ball gravity
 		state.Ball.Pos.Y += 2
 		if state.Ball.Pos.Y > canvasHeight-100-state.Ball.Radius {
 			state.Ball.Pos.Y = 100
@@ -108,8 +129,8 @@ func gameLoop() {
 	}
 }
 
-// broadcast state to client at 60 fps
-func broadcastLoop(ws *websocket.Conn) {
+// broadcast state to all clients at 60 fps
+func broadcastLoop() {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
 
@@ -119,11 +140,13 @@ func broadcastLoop(ws *websocket.Conn) {
 			"type":  "state",
 			"state": state,
 		})
-		stateMutex.Unlock()
 
-		if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
-			break
+		// send to all connected clients
+		for conn := range clients {
+			// ignore errors for now, handled in read loop
+			conn.WriteMessage(websocket.TextMessage, msg)
 		}
+		stateMutex.Unlock()
 	}
 }
 
@@ -134,40 +157,69 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	fmt.Println("player connected")
+	// register new player
+	stateMutex.Lock()
+	playerID := fmt.Sprintf("player_%d", nextID)
+	nextID++
 
-	// start broadcasting state to this client
-	go broadcastLoop(ws)
+	// determine side and color
+	startX := 100.0
+	color := "#4caf50" // green for left
+	side := "left"
+	if len(state.Players)%2 != 0 {
+		startX = 700.0 - 60.0
+		color = "#2196f3" // blue for right
+		side = "right"
+	}
 
-	// listen for inputs from client
+	state.Players[playerID] = &PlayerState{
+		Id:     playerID,
+		Pos:    Vector2{X: startX, Y: 0},
+		Width:  60,
+		Height: 60,
+		Color:  color,
+		Side:   side,
+	}
+	clients[ws] = playerID
+	stateMutex.Unlock()
+
+	fmt.Println(playerID, "connected")
+
+	// listen for inputs from this client
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			fmt.Println("player disconnected:", err)
+			fmt.Println(playerID, "disconnected")
+			// cleanup on disconnect
+			stateMutex.Lock()
+			delete(state.Players, playerID)
+			delete(clients, ws)
+			stateMutex.Unlock()
 			break
 		}
 
-		// parse inputs
 		var inputData map[string]interface{}
 		if err := json.Unmarshal(msg, &inputData); err == nil && inputData["type"] == "input" {
 			inputs := inputData["keys"].(map[string]interface{})
-			
+
 			stateMutex.Lock()
-			keys.A = inputs["a"].(bool)
-			keys.D = inputs["d"].(bool)
-			keys.W = inputs["w"].(bool)
+			if p, exists := state.Players[playerID]; exists {
+				p.Inputs.A = inputs["a"].(bool)
+				p.Inputs.D = inputs["d"].(bool)
+				p.Inputs.W = inputs["w"].(bool)
+			}
 			stateMutex.Unlock()
 		}
 	}
 }
 
 func main() {
-	// start physics engine
 	go gameLoop()
+	go broadcastLoop() // global broadcast routine
 
 	http.HandleFunc("/ws", handleConnections)
 	fmt.Println("server running on http://localhost:8080")
-	
+
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal("server error: ", err)
 	}
