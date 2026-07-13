@@ -69,13 +69,14 @@ func gameLoop() {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
 
-	canvasWidth, canvasHeight := 800.0, 600.0
-	groundY := canvasHeight - 100.0
+	// new logical resolution
+	canvasWidth, canvasHeight := 1600.0, 900.0
+	groundY := canvasHeight - 150.0 // higher ground
 
-	// net dimensions (matches frontend: x = center-5, y = height-300, w = 10, h = 200)
-	netWidth, netHeight := 10.0, 200.0
+	// updated net dimensions
+	netWidth, netHeight := 20.0, 350.0
 	netX := canvasWidth/2 - netWidth/2
-	netY := canvasHeight - 300.0
+	netY := canvasHeight - 500.0
 
 	for range ticker.C {
 		stateMutex.Lock()
@@ -83,7 +84,7 @@ func gameLoop() {
 		// 1. process players
 		for _, p := range state.Players {
 			playerGroundY := groundY - p.Height
-			speed := 7.0
+			speed := 12.0
 
 			if p.Inputs.A {
 				p.Pos.X -= speed
@@ -113,12 +114,12 @@ func gameLoop() {
 
 			// vertical movement & gravity
 			if p.Inputs.W && !p.IsJumping {
-				p.VelocityY = -15
+				p.VelocityY = -22
 				p.IsJumping = true
 			}
 
 			p.Pos.Y += p.VelocityY
-			p.VelocityY += 0.8 // gravity
+			p.VelocityY += 1.2 // gravity
 
 			if p.Pos.Y >= playerGroundY {
 				p.Pos.Y = playerGroundY
@@ -128,7 +129,7 @@ func gameLoop() {
 		}
 
 		// 2. ball physics
-		state.Ball.Velocity.Y += 0.4 // ball gravity
+		state.Ball.Velocity.Y += 0.8 // ball gravity
 		state.Ball.Pos.X += state.Ball.Velocity.X
 		state.Ball.Pos.Y += state.Ball.Velocity.Y
 
@@ -245,11 +246,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	playerID := fmt.Sprintf("player_%d", nextID)
 	nextID++
 
-	startX := 100.0
+	startX := 200.0
 	color := "#4caf50"
 	side := "left"
 	if len(state.Players)%2 != 0 {
-		startX = 700.0 - 60.0
+		startX = 1400.0 - 60.0 // spawn second player on the right
 		color = "#2196f3"
 		side = "right"
 	}

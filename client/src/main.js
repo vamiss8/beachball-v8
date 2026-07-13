@@ -2,9 +2,23 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// hardcoded for now to match server logic, we'll make it dynamic later
-canvas.width = 800;
-canvas.height = 600;
+// logical resolution (fixed aspect ratio 16:9)
+const logicalWidth = 1600;
+const logicalHeight = 900;
+canvas.width = logicalWidth;
+canvas.height = logicalHeight;
+
+// scale canvas to fit window automatically
+function resize() {
+    const scale = Math.min(
+        window.innerWidth / logicalWidth, 
+        window.innerHeight / logicalHeight
+    );
+    canvas.style.width = `${logicalWidth * scale}px`;
+    canvas.style.height = `${logicalHeight * scale}px`;
+}
+window.addEventListener('resize', resize);
+resize();
 
 // local state placeholders (will be overwritten by server)
 let serverState = null;
@@ -63,13 +77,13 @@ function draw() {
     // clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // draw ground
+    // draw ground (высота 150, как на сервере)
     ctx.fillStyle = '#eedd82';
-    ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+    ctx.fillRect(0, canvas.height - 150, canvas.width, 150);
 
-    // draw net
+    // draw net (смещение 500 и высота 350, как на сервере)
     ctx.fillStyle = '#333';
-    ctx.fillRect(canvas.width / 2 - 5, canvas.height - 300, 10, 200);
+    ctx.fillRect(canvas.width / 2 - 10, canvas.height - 500, 20, 350);
 
     // draw entities if state is received
     if (serverState) {
