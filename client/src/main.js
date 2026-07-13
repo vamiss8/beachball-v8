@@ -27,24 +27,28 @@ socket.onmessage = (event) => {
     }
 };
 
-// listen for keydown
+// listen for keydown (fixed layout issue using e.code)
 window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    if (key === 'a' || key === 'd' || key === 'w' || key === ' ') {
-        const inputKey = key === ' ' ? 'w' : key;
-        keys[inputKey] = true;
-        sendInput();
-    }
+    if (e.code === 'KeyA') keys.a = true;
+    if (e.code === 'KeyD') keys.d = true;
+    if (e.code === 'KeyW' || e.code === 'Space') keys.w = true;
+    sendInput();
 });
 
 // listen for keyup
 window.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    if (key === 'a' || key === 'd' || key === 'w' || key === ' ') {
-        const inputKey = key === ' ' ? 'w' : key;
-        keys[inputKey] = false;
-        sendInput();
-    }
+    if (e.code === 'KeyA') keys.a = false;
+    if (e.code === 'KeyD') keys.d = false;
+    if (e.code === 'KeyW' || e.code === 'Space') keys.w = false;
+    sendInput();
+});
+
+// clear inputs on window blur (fixed sticky keys)
+window.addEventListener('blur', () => {
+    keys.a = false;
+    keys.d = false;
+    keys.w = false;
+    sendInput();
 });
 
 // send input to server
