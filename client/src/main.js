@@ -77,17 +77,16 @@ function draw() {
     // clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // draw ground (высота 150, как на сервере)
+    // draw ground
     ctx.fillStyle = '#eedd82';
     ctx.fillRect(0, canvas.height - 150, canvas.width, 150);
 
-    // draw net (смещение 500 и высота 350, как на сервере)
+    // draw net
     ctx.fillStyle = '#333';
     ctx.fillRect(canvas.width / 2 - 10, canvas.height - 500, 20, 350);
 
-    // draw entities if state is received
     if (serverState) {
-        // draw all players
+        // draw players
         for (const id in serverState.players) {
             const p = serverState.players[id];
             ctx.fillStyle = p.color;
@@ -101,6 +100,26 @@ function draw() {
         ctx.fillStyle = '#ff4444';
         ctx.fill();
         ctx.closePath();
+
+        // draw ui (score)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = 'bold 96px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+            `${serverState.score.left} - ${serverState.score.right}`, 
+            canvas.width / 2, 
+            150
+        );
+
+        // draw score overlay
+        if (serverState.state === 'scored') {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 120px Arial, sans-serif';
+            ctx.fillText('POINT!', canvas.width / 2, canvas.height / 2);
+        }
     }
 }
 
