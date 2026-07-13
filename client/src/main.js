@@ -2,13 +2,11 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// logical resolution (fixed aspect ratio 16:9)
 const logicalWidth = 1600;
 const logicalHeight = 900;
 canvas.width = logicalWidth;
 canvas.height = logicalHeight;
 
-// scale canvas to fit window automatically
 function resize() {
     const scale = Math.min(
         window.innerWidth / logicalWidth, 
@@ -20,61 +18,67 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// local state placeholders (will be overwritten by server)
 let serverState = null;
 
-// input tracking
-const keys = { a: false, d: false, w: false };
+// advanced input tracking
+const keys = { a: false, d: false, w: false, s: false, dashL: false, dashR: false };
+let lastPressA = 0;
+let lastPressD = 0;
 
-// init websocket
 const socket = new WebSocket("ws://localhost:8080/ws");
-
-socket.onopen = () => {
-    console.log("connected to server");
-};
-
-// receive state from server
+socket.onopen = () => console.log("connected to server");
 socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    if (data.type === 'state') {
-        serverState = data.state;
-    }
+    if (data.type === 'state') serverState = data.state;
 };
 
-// listen for keydown (fixed layout issue using e.code)
+// handle keydown with double-tap detection
 window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyA') keys.a = true;
-    if (e.code === 'KeyD') keys.d = true;
+    if (e.repeat) return; // ignore hold-repeats for double tap logic
+    
+    if (e.code === 'KeyA') {
+        const now = Date.now();
+        if (now - lastPressA < 250) keys.dashL = true; // 250ms threshold
+        lastPressA = now;
+        keys.a = true;
+    }
+    if (e.code === 'KeyD') {
+        const now = Date.now();
+        if (now - lastPressD < 250) keys.dashR = true;
+        lastPressD = now;
+        keys.d = true;
+    }
     if (e.code === 'KeyW' || e.code === 'Space') keys.w = true;
+    if (e.code === 'KeyS') keys.s = true;
     sendInput();
 });
 
-// listen for keyup
+// handle keyup
 window.addEventListener('keyup', (e) => {
     if (e.code === 'KeyA') keys.a = false;
     if (e.code === 'KeyD') keys.d = false;
     if (e.code === 'KeyW' || e.code === 'Space') keys.w = false;
+    if (e.code === 'KeyS') keys.s = false;
     sendInput();
 });
 
-// clear inputs on window blur (fixed sticky keys)
 window.addEventListener('blur', () => {
-    keys.a = false;
-    keys.d = false;
-    keys.w = false;
+    keys.a = keys.d = keys.w = keys.s = false;
     sendInput();
 });
 
-// send input to server
+// send input as a snapshot
 function sendInput() {
     if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'input', keys: keys }));
+        // reset dash trigger immediately after sending
+        keys.dashL = false;
+        keys.dashR = false;
     }
 }
 
 // render frame
 function draw() {
-    // clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // draw ground
@@ -86,11 +90,25 @@ function draw() {
     ctx.fillRect(canvas.width / 2 - 10, canvas.height - 100 - 240, 20, 240);
 
     if (serverState) {
-        // draw players
+        // draw players with rotation support
         for (const id in serverState.players) {
             const p = serverState.players[id];
+            
+            ctx.save();
+            // move context to the center of the player
+            ctx.translate(p.pos.x + p.width / 2, p.pos.y + p.height / 2);
+            ctx.rotate(p.rotation);
+            
+            // draw body
             ctx.fillStyle = p.color;
-            ctx.fillRect(p.pos.x, p.pos.y, p.width, p.height);
+            ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
+            
+            // draw "eyes" or visor to clearly see rotation
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            const eyeOffsetX = p.side === 'left' ? 10 : -50;
+            ctx.fillRect(eyeOffsetX, -30, 40, 20);
+            
+            ctx.restore();
         }
 
         // draw ball
@@ -101,7 +119,7 @@ function draw() {
         ctx.fill();
         ctx.closePath();
 
-        // draw ui (score)
+        // draw ui
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = 'bold 96px Arial, sans-serif';
         ctx.textAlign = 'center';
@@ -111,11 +129,9 @@ function draw() {
             150
         );
 
-        // draw score overlay
         if (serverState.state === 'scored') {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 120px Arial, sans-serif';
             ctx.fillText('POINT!', canvas.width / 2, canvas.height / 2);
@@ -123,11 +139,8 @@ function draw() {
     }
 }
 
-// main loop (render only)
 function loop() {
     draw();
     requestAnimationFrame(loop);
 }
-
-// start renderer
 loop();
