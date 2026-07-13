@@ -1,9 +1,14 @@
 body {
   margin: 0;
   overflow: hidden;
-  background-color: #87CEEB;
+  background-color: #333; /* dark background behind the canvas */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
 }
 
 canvas {
-  display: block;
+  background-color: #87ceeb; /* summer sky */
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); /* neat border */
 }
