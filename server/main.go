@@ -72,6 +72,11 @@ func gameLoop() {
 	canvasWidth, canvasHeight := 800.0, 600.0
 	groundY := canvasHeight - 100.0
 
+	// net dimensions (matches frontend: x = center-5, y = height-300, w = 10, h = 200)
+	netWidth, netHeight := 10.0, 200.0
+	netX := canvasWidth/2 - netWidth/2
+	netY := canvasHeight - 300.0
+
 	for range ticker.C {
 		stateMutex.Lock()
 
@@ -95,7 +100,7 @@ func gameLoop() {
 				p.Pos.X = canvasWidth - p.Width
 			}
 
-			// net collision
+			// net collision for players
 			if p.Side == "left" {
 				if p.Pos.X > canvasWidth/2-p.Width-5 {
 					p.Pos.X = canvasWidth/2 - p.Width - 5
@@ -130,7 +135,7 @@ func gameLoop() {
 		// ball boundaries (walls)
 		if state.Ball.Pos.X < state.Ball.Radius {
 			state.Ball.Pos.X = state.Ball.Radius
-			state.Ball.Velocity.X *= -0.8 // bounce off wall
+			state.Ball.Velocity.X *= -0.8 // bounce
 		}
 		if state.Ball.Pos.X > canvasWidth-state.Ball.Radius {
 			state.Ball.Pos.X = canvasWidth - state.Ball.Radius
@@ -140,41 +145,70 @@ func gameLoop() {
 		// ball boundaries (floor)
 		if state.Ball.Pos.Y > groundY-state.Ball.Radius {
 			state.Ball.Pos.Y = groundY - state.Ball.Radius
-			state.Ball.Velocity.Y *= -0.7 // bounce off floor
-			state.Ball.Velocity.X *= 0.98 // floor friction
+			state.Ball.Velocity.Y *= -0.7 // bounce
+			state.Ball.Velocity.X *= 0.98 // friction
 		}
 
 		// 3. ball vs player collisions (circle vs AABB)
 		for _, p := range state.Players {
-			// find closest point on player rect to ball center
 			closestX := math.Max(p.Pos.X, math.Min(state.Ball.Pos.X, p.Pos.X+p.Width))
 			closestY := math.Max(p.Pos.Y, math.Min(state.Ball.Pos.Y, p.Pos.Y+p.Height))
 
-			// distance between closest point and ball center
-			distanceX := state.Ball.Pos.X - closestX
-			distanceY := state.Ball.Pos.Y - closestY
-			distanceSquared := (distanceX * distanceX) + (distanceY * distanceY)
+			distX := state.Ball.Pos.X - closestX
+			distY := state.Ball.Pos.Y - closestY
+			distSquared := (distX * distX) + (distY * distY)
 
-			if distanceSquared < (state.Ball.Radius * state.Ball.Radius) {
-				// collision! calculate vector from player center to ball center
+			if distSquared < (state.Ball.Radius * state.Ball.Radius) {
 				playerCenterX := p.Pos.X + p.Width/2
 				playerCenterY := p.Pos.Y + p.Height/2
 
 				diffX := state.Ball.Pos.X - playerCenterX
 				diffY := state.Ball.Pos.Y - playerCenterY
 
-				// normalize
 				length := math.Sqrt(diffX*diffX + diffY*diffY)
 				if length > 0 {
 					diffX /= length
 					diffY /= length
 				}
 
-				// apply bounce force
 				bounceForce := 12.0
 				state.Ball.Velocity.X = diffX * bounceForce
-				state.Ball.Velocity.Y = diffY*bounceForce - 3.0 // extra lift
+				state.Ball.Velocity.Y = diffY * bounceForce - 3.0 // extra lift
 			}
+		}
+
+		// 4. ball vs net collision (circle vs AABB)
+		closestNetX := math.Max(netX, math.Min(state.Ball.Pos.X, netX+netWidth))
+		closestNetY := math.Max(netY, math.Min(state.Ball.Pos.Y, netY+netHeight))
+
+		distNetX := state.Ball.Pos.X - closestNetX
+		distNetY := state.Ball.Pos.Y - closestNetY
+		distNetSquared := (distNetX * distNetX) + (distNetY * distNetY)
+
+		if distNetSquared < (state.Ball.Radius * state.Ball.Radius) {
+			dist := math.Sqrt(distNetSquared)
+			if dist == 0 {
+				dist = 0.1 // prevent division by zero
+				distNetX = 0.1
+				distNetY = 0
+			}
+
+			// normalize collision normal
+			nx := distNetX / dist
+			ny := distNetY / dist
+
+			// calculate penetration depth and push the ball out
+			penetration := state.Ball.Radius - dist
+			state.Ball.Pos.X += nx * penetration
+			state.Ball.Pos.Y += ny * penetration
+
+			// reflect velocity vector: v = v - 2 * dot(v, n) * n
+			dotProduct := state.Ball.Velocity.X*nx + state.Ball.Velocity.Y*ny
+			
+			// net absorbs a lot of energy, so bounce coefficient is low (0.4)
+			bounce := 0.4
+			state.Ball.Velocity.X = (state.Ball.Velocity.X - 2*dotProduct*nx) * bounce
+			state.Ball.Velocity.Y = (state.Ball.Velocity.Y - 2*dotProduct*ny) * bounce
 		}
 
 		stateMutex.Unlock()
