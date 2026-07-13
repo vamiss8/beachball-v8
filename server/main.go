@@ -59,7 +59,7 @@ type GameState struct {
 var (
 	state = GameState{
 		Players: make(map[string]*PlayerState),
-		Ball:    BallState{Pos: Vector2{X: 800, Y: 200}, Velocity: Vector2{X: 0, Y: 0}, Radius: 20, HitCount: 0},
+		Ball:    BallState{Pos: Vector2{X: 800, Y: 200}, Velocity: Vector2{X: 0, Y: 0}, Radius: 45, HitCount: 0},
 		Score:   map[string]int{"left": 0, "right": 0},
 		State:   "playing",
 	}
@@ -75,11 +75,11 @@ func gameLoop() {
 	defer ticker.Stop()
 
 	canvasWidth, canvasHeight := 1600.0, 900.0
-	groundY := canvasHeight - 150.0
+	groundY := canvasHeight - 100.0
 
-	netWidth, netHeight := 20.0, 350.0
+	netWidth, netHeight := 20.0, 240.0
 	netX := canvasWidth/2 - netWidth/2
-	netY := canvasHeight - 500.0
+	netY := groundY - netHeight
 
 	for range ticker.C {
 		stateMutex.Lock()
@@ -87,7 +87,7 @@ func gameLoop() {
 		// 1. process players (can move even during score pause)
 		for _, p := range state.Players {
 			playerGroundY := groundY - p.Height
-			speed := 12.0
+			speed := 14.0
 
 			if p.Inputs.A {
 				p.Pos.X -= speed
@@ -114,7 +114,7 @@ func gameLoop() {
 			}
 
 			if p.Inputs.W && !p.IsJumping {
-				p.VelocityY = -22
+				p.VelocityY = -24
 				p.IsJumping = true
 			}
 
@@ -246,9 +246,9 @@ func resetRound(canvasWidth float64, groundY float64) {
 
 	for _, p := range state.Players {
 		if p.Side == "left" {
-			p.Pos = Vector2{X: 200, Y: groundY - p.Height}
+			p.Pos = Vector2{X: 300, Y: groundY - p.Height}
 		} else {
-			p.Pos = Vector2{X: canvasWidth - 200 - p.Width, Y: groundY - p.Height}
+			p.Pos = Vector2{X: 1600 - 300 - p.Width, Y: groundY - p.Height}
 		}
 		p.VelocityY = 0
 		p.IsJumping = false
@@ -290,7 +290,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	color := "#4caf50"
 	side := "left"
 	if len(state.Players)%2 != 0 {
-		startX = 1400.0 - 60.0 // spawn second player on the right
+		startX = 1600 - 300 - 120 // spawn second player on the right
 		color = "#2196f3"
 		side = "right"
 	}
@@ -298,8 +298,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	state.Players[playerID] = &PlayerState{
 		Id:     playerID,
 		Pos:    Vector2{X: startX, Y: 0},
-		Width:  60,
-		Height: 60,
+		Width:  120,
+		Height: 120,
 		Color:  color,
 		Side:   side,
 	}
