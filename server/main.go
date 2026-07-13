@@ -17,45 +17,58 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// game state structures
+// core math vectors
 type Vector2 struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
 
 type Inputs struct {
-	A bool `json:"a"`
-	D bool `json:"d"`
-	W bool `json:"w"`
+	A     bool `json:"a"`
+	D     bool `json:"d"`
+	W     bool `json:"w"`
+	S     bool `json:"s"`
+	DashL bool `json:"dashL"`
+	DashR bool `json:"dashR"`
 }
 
+// advanced player state
 type PlayerState struct {
-	Id        string  `json:"id"`
-	Pos       Vector2 `json:"pos"`
-	VelocityY float64 `json:"velocityY"`
-	IsJumping bool    `json:"isJumping"`
-	Width     float64 `json:"width"`
-	Height    float64 `json:"height"`
-	Color     string  `json:"color"`
-	Side      string  `json:"side"`
-	Inputs    Inputs  `json:"-"`
+	Id              string  `json:"id"`
+	Pos             Vector2 `json:"pos"`
+	VelocityX       float64 `json:"velocityX"`
+	VelocityY       float64 `json:"velocityY"`
+	DashVelocity    float64 `json:"-"`
+	Rotation        float64 `json:"rotation"`
+	IsJumping       bool    `json:"isJumping"`
+	CanDoubleJump   bool    `json:"-"`
+	IsSomersaulting bool    `json:"isSomersaulting"`
+	IsBlocking      bool    `json:"isBlocking"`
+	DashesLeft      int     `json:"-"`
+	DashCooldown    int     `json:"-"`
+	PrevW           bool    `json:"-"` // track edge detection for double jump
+	Width           float64 `json:"width"`
+	Height          float64 `json:"height"`
+	Color           string  `json:"color"`
+	Side            string  `json:"side"`
+	Inputs          Inputs  `json:"-"`
 }
 
 type BallState struct {
 	Pos      Vector2 `json:"pos"`
 	Velocity Vector2 `json:"velocity"`
 	Radius   float64 `json:"radius"`
-	HitCount int     `json:"hitCount"` // tracks rally length for acceleration
+	HitCount int     `json:"hitCount"`
 }
 
 type GameState struct {
 	Players map[string]*PlayerState `json:"players"`
 	Ball    BallState               `json:"ball"`
 	Score   map[string]int          `json:"score"`
-	State   string                  `json:"state"` // "playing" or "scored"
+	State   string                  `json:"state"`
 }
 
-// global state
+// global game state
 var (
 	state = GameState{
 		Players: make(map[string]*PlayerState),
@@ -66,10 +79,9 @@ var (
 	stateMutex sync.Mutex
 	clients    = make(map[*websocket.Conn]string)
 	nextID     = 1
-	resetTicks = 0 // timer for round reset
+	resetTicks = 0
 )
 
-// run physics loop at 60 fps
 func gameLoop() {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
@@ -84,25 +96,49 @@ func gameLoop() {
 	for range ticker.C {
 		stateMutex.Lock()
 
-		// 1. process players (can move even during score pause)
+		// 1. process players
 		for _, p := range state.Players {
 			playerGroundY := groundY - p.Height
-			speed := 14.0
 
+			// cooldowns
+			if p.DashCooldown > 0 {
+				p.DashCooldown--
+			}
+
+			// dash mechanics
+			if p.Inputs.DashL && p.DashesLeft > 0 && p.DashCooldown <= 0 {
+				p.DashVelocity = -35.0
+				p.DashesLeft--
+				p.DashCooldown = 30 // 0.5 sec
+				p.IsSomersaulting = true
+			}
+			if p.Inputs.DashR && p.DashesLeft > 0 && p.DashCooldown <= 0 {
+				p.DashVelocity = 35.0
+				p.DashesLeft--
+				p.DashCooldown = 30
+				p.IsSomersaulting = true
+			}
+
+			// horizontal movement
+			baseSpeed := 0.0
 			if p.Inputs.A {
-				p.Pos.X -= speed
+				baseSpeed = -10.0
 			}
 			if p.Inputs.D {
-				p.Pos.X += speed
+				baseSpeed = 10.0
 			}
 
+			p.VelocityX = baseSpeed + p.DashVelocity
+			p.Pos.X += p.VelocityX
+			p.DashVelocity *= 0.85 // rapid decay for snappy dashes
+
+			// bounds
 			if p.Pos.X < 0 {
 				p.Pos.X = 0
 			}
 			if p.Pos.X > canvasWidth-p.Width {
 				p.Pos.X = canvasWidth - p.Width
 			}
-
 			if p.Side == "left" {
 				if p.Pos.X > canvasWidth/2-p.Width-10 {
 					p.Pos.X = canvasWidth/2 - p.Width - 10
@@ -113,39 +149,77 @@ func gameLoop() {
 				}
 			}
 
-			if p.Inputs.W && !p.IsJumping {
-				p.VelocityY = -24
-				p.IsJumping = true
+			// vertical & jump mechanics (edge detection on W)
+			justPressedW := p.Inputs.W && !p.PrevW
+			p.PrevW = p.Inputs.W
+
+			if justPressedW {
+				if !p.IsJumping {
+					p.VelocityY = -18.0
+					p.IsJumping = true
+					p.CanDoubleJump = true
+				} else if p.CanDoubleJump {
+					p.VelocityY = -16.0
+					p.CanDoubleJump = false
+					p.IsSomersaulting = true
+				}
+			}
+
+			// block mechanic
+			p.IsBlocking = p.Inputs.S && p.IsJumping
+			if p.IsBlocking {
+				p.VelocityY += 1.8 // fast fall while blocking
+			} else {
+				p.VelocityY += 0.6 // floatier standard gravity
 			}
 
 			p.Pos.Y += p.VelocityY
-			p.VelocityY += 1.2 // player gravity
 
+			// ground collision
 			if p.Pos.Y >= playerGroundY {
 				p.Pos.Y = playerGroundY
 				p.VelocityY = 0
 				p.IsJumping = false
+				p.IsSomersaulting = false
+				p.IsBlocking = false
+				p.CanDoubleJump = true
+				p.DashesLeft = 2 // reset dashes on ground
+			}
+
+			// animation state (rotation)
+			if p.IsSomersaulting {
+				if p.Side == "left" {
+					p.Rotation += 0.35
+				} else {
+					p.Rotation -= 0.35
+				}
+			} else if p.IsBlocking {
+				if p.Side == "left" {
+					p.Rotation = math.Pi / 4 // 45 degrees
+				} else {
+					p.Rotation = -math.Pi / 4
+				}
+			} else {
+				// reset rotation
+				p.Rotation = 0
 			}
 		}
 
-		// handle round reset state
 		if state.State == "scored" {
 			resetTicks--
-			// apply friction so ball stops rolling
 			state.Ball.Pos.X += state.Ball.Velocity.X
 			state.Ball.Velocity.X *= 0.95
 			if resetTicks <= 0 {
 				resetRound(canvasWidth, groundY)
 			}
 			stateMutex.Unlock()
-			continue // skip ball physics until reset
+			continue
 		}
 
 		// 2. ball physics
-		// ball gravity increases with rally length
-		dynamicGravity := 0.8 + (float64(state.Ball.HitCount) * 0.05)
-		if dynamicGravity > 2.5 {
-			dynamicGravity = 2.5 // cap max gravity
+		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.02)
+		if dynamicGravity > 1.2 {
+			dynamicGravity = 1.2
 		}
 
 		state.Ball.Velocity.Y += dynamicGravity
@@ -161,10 +235,9 @@ func gameLoop() {
 			state.Ball.Velocity.X *= -0.8
 		}
 
-		// ball hits floor - scoring logic!
 		if state.Ball.Pos.Y > groundY-state.Ball.Radius {
 			state.Ball.Pos.Y = groundY - state.Ball.Radius
-			state.Ball.Velocity.Y *= -0.3 // weak bounce on sand
+			state.Ball.Velocity.Y *= -0.3
 
 			if state.Ball.Pos.X < canvasWidth/2 {
 				state.Score["right"]++
@@ -172,10 +245,10 @@ func gameLoop() {
 				state.Score["left"]++
 			}
 			state.State = "scored"
-			resetTicks = 120 // wait 2 seconds (120 ticks at 60fps)
+			resetTicks = 120
 		}
 
-		// 3. ball vs player collisions
+		// 3. ball vs player collisions (proper impulse physics)
 		for _, p := range state.Players {
 			closestX := math.Max(p.Pos.X, math.Min(state.Ball.Pos.X, p.Pos.X+p.Width))
 			closestY := math.Max(p.Pos.Y, math.Min(state.Ball.Pos.Y, p.Pos.Y+p.Height))
@@ -185,28 +258,56 @@ func gameLoop() {
 			distSquared := (distX * distX) + (distY * distY)
 
 			if distSquared < (state.Ball.Radius * state.Ball.Radius) {
-				playerCenterX := p.Pos.X + p.Width/2
-				playerCenterY := p.Pos.Y + p.Height/2
-
-				diffX := state.Ball.Pos.X - playerCenterX
-				diffY := state.Ball.Pos.Y - playerCenterY
-
-				length := math.Sqrt(diffX*diffX + diffY*diffY)
-				if length > 0 {
-					diffX /= length
-					diffY /= length
+				dist := math.Sqrt(distSquared)
+				if dist == 0 {
+					dist = 0.1
 				}
 
-				// bounce force increases with rally length
-				bounceForce := 14.0 + (float64(state.Ball.HitCount) * 0.8)
-				if bounceForce > 35.0 {
-					bounceForce = 35.0 // cap max speed
-				}
+				// collision normal (pointing from player to ball)
+				nx := distX / dist
+				ny := distY / dist
 
-				state.Ball.Velocity.X = diffX * bounceForce
-				state.Ball.Velocity.Y = diffY * bounceForce - 3.0
-				
-				state.Ball.HitCount++ // increase rally hits
+				// push ball out of player to prevent sticking
+				penetration := state.Ball.Radius - dist
+				state.Ball.Pos.X += nx * penetration
+				state.Ball.Pos.Y += ny * penetration
+
+				// calculate relative velocity
+				relVelX := state.Ball.Velocity.X - p.VelocityX
+				relVelY := state.Ball.Velocity.Y - p.VelocityY
+
+				// velocity along the normal
+				dot := relVelX*nx + relVelY*ny
+
+				// only resolve if objects are moving towards each other
+				if dot < 0 {
+					restitution := 0.8 // default bounce
+
+					if p.IsBlocking {
+						restitution = 0.2 // deaden the ball
+						// force deflection forward and down
+						if p.Side == "left" {
+							nx = 0.8
+							ny = 0.5
+						} else {
+							nx = -0.8
+							ny = 0.5
+						}
+					} else if p.IsSomersaulting {
+						restitution = 1.6 // smash multiplier!
+					}
+
+					// calculate impulse and apply to ball
+					impulse := -(1 + restitution) * dot
+					state.Ball.Velocity.X += impulse * nx
+					state.Ball.Velocity.Y += impulse * ny
+
+					// transfer a portion of player's momentum for control (allows juggling)
+					state.Ball.Velocity.X += p.VelocityX * 0.3
+					state.Ball.Velocity.Y += p.VelocityY * 0.3
+
+					state.Ball.HitCount++
+				}
 			}
 		}
 
@@ -220,7 +321,9 @@ func gameLoop() {
 
 		if distNetSquared < (state.Ball.Radius * state.Ball.Radius) {
 			dist := math.Sqrt(distNetSquared)
-			if dist == 0 { dist = 0.1 }
+			if dist == 0 {
+				dist = 0.1
+			}
 
 			nx := distNetX / dist
 			ny := distNetY / dist
@@ -238,7 +341,6 @@ func gameLoop() {
 	}
 }
 
-// resets positions and ball after a score
 func resetRound(canvasWidth float64, groundY float64) {
 	state.Ball.Pos = Vector2{X: canvasWidth / 2, Y: 200}
 	state.Ball.Velocity = Vector2{X: 0, Y: 0}
@@ -248,15 +350,18 @@ func resetRound(canvasWidth float64, groundY float64) {
 		if p.Side == "left" {
 			p.Pos = Vector2{X: 300, Y: groundY - p.Height}
 		} else {
-			p.Pos = Vector2{X: 1600 - 300 - p.Width, Y: groundY - p.Height}
+			p.Pos = Vector2{X: canvasWidth - 300 - p.Width, Y: groundY - p.Height}
 		}
 		p.VelocityY = 0
+		p.VelocityX = 0
+		p.Rotation = 0
 		p.IsJumping = false
+		p.CanDoubleJump = true
+		p.DashesLeft = 2
 	}
 	state.State = "playing"
 }
 
-// broadcast state to all clients at 60 fps
 func broadcastLoop() {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
@@ -267,7 +372,6 @@ func broadcastLoop() {
 			"type":  "state",
 			"state": state,
 		})
-
 		for conn := range clients {
 			conn.WriteMessage(websocket.TextMessage, msg)
 		}
@@ -286,11 +390,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	playerID := fmt.Sprintf("player_%d", nextID)
 	nextID++
 
-	startX := 200.0
+	startX := 300.0
 	color := "#4caf50"
 	side := "left"
 	if len(state.Players)%2 != 0 {
-		startX = 1600 - 300 - 120 // spawn second player on the right
+		startX = 1600.0 - 300.0 - 120.0
 		color = "#2196f3"
 		side = "right"
 	}
@@ -328,6 +432,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				p.Inputs.A = inputs["a"].(bool)
 				p.Inputs.D = inputs["d"].(bool)
 				p.Inputs.W = inputs["w"].(bool)
+				p.Inputs.S = inputs["s"].(bool)
+				p.Inputs.DashL = inputs["dashL"].(bool)
+				p.Inputs.DashR = inputs["dashR"].(bool)
 			}
 			stateMutex.Unlock()
 		}
