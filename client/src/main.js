@@ -79,11 +79,11 @@ function draw() {
 
     // draw ground
     ctx.fillStyle = '#eedd82';
-    ctx.fillRect(0, canvas.height - 150, canvas.width, 150);
+    ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
 
     // draw net
     ctx.fillStyle = '#333';
-    ctx.fillRect(canvas.width / 2 - 10, canvas.height - 500, 20, 350);
+    ctx.fillRect(canvas.width / 2 - 10, canvas.height - 100 - 240, 20, 240);
 
     if (serverState) {
         // draw players
