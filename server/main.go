@@ -12,12 +12,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// websocket upgrader
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// core math vectors
 type Vector2 struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
@@ -32,26 +30,26 @@ type Inputs struct {
 	DashR bool `json:"dashR"`
 }
 
-// advanced player state
+// Обновленный стейт игрока (убрали IsSomersaulting, добавили RotationVel)
 type PlayerState struct {
-	Id              string  `json:"id"`
-	Pos             Vector2 `json:"pos"`
-	VelocityX       float64 `json:"velocityX"`
-	VelocityY       float64 `json:"velocityY"`
-	DashVelocity    float64 `json:"-"`
-	Rotation        float64 `json:"rotation"`
-	IsJumping       bool    `json:"isJumping"`
-	CanDoubleJump   bool    `json:"-"`
-	IsSomersaulting bool    `json:"isSomersaulting"`
-	IsBlocking      bool    `json:"isBlocking"`
-	DashesLeft      int     `json:"-"`
-	DashCooldown    int     `json:"-"`
-	PrevW           bool    `json:"-"` // track edge detection for double jump
-	Width           float64 `json:"width"`
-	Height          float64 `json:"height"`
-	Color           string  `json:"color"`
-	Side            string  `json:"side"`
-	Inputs          Inputs  `json:"-"`
+	Id            string  `json:"id"`
+	Pos           Vector2 `json:"pos"`
+	VelocityX     float64 `json:"velocityX"`
+	VelocityY     float64 `json:"velocityY"`
+	DashVelocity  float64 `json:"-"`
+	Rotation      float64 `json:"rotation"`
+	RotationVel   float64 `json:"-"` // Скорость текущего переката/сальто
+	IsJumping     bool    `json:"isJumping"`
+	CanDoubleJump bool    `json:"-"`
+	IsBlocking    bool    `json:"isBlocking"`
+	DashesLeft    int     `json:"-"`
+	DashCooldown  int     `json:"-"`
+	PrevW         bool    `json:"-"`
+	Width         float64 `json:"width"`
+	Height        float64 `json:"height"`
+	Color         string  `json:"color"`
+	Side          string  `json:"side"`
+	Inputs        Inputs  `json:"-"`
 }
 
 type BallState struct {
@@ -68,7 +66,6 @@ type GameState struct {
 	State   string                  `json:"state"`
 }
 
-// global game state
 var (
 	state = GameState{
 		Players: make(map[string]*PlayerState),
@@ -96,60 +93,46 @@ func gameLoop() {
 	for range ticker.C {
 		stateMutex.Lock()
 
-		// 1. process players
+		// 1. Обработка игроков
 		for _, p := range state.Players {
 			playerGroundY := groundY - p.Height
 
-			// cooldowns
 			if p.DashCooldown > 0 {
 				p.DashCooldown--
 			}
 
-			// dash mechanics
+			// Логика дэшей (назначаем скорость движения и скорость вращения)
 			if p.Inputs.DashL && p.DashesLeft > 0 && p.DashCooldown <= 0 {
 				p.DashVelocity = -35.0
 				p.DashesLeft--
-				p.DashCooldown = 30 // 0.5 sec
-				p.IsSomersaulting = true
+				p.DashCooldown = 30
+				p.RotationVel = -0.35 // Кувырок влево (против часовой)
 			}
 			if p.Inputs.DashR && p.DashesLeft > 0 && p.DashCooldown <= 0 {
 				p.DashVelocity = 35.0
 				p.DashesLeft--
 				p.DashCooldown = 30
-				p.IsSomersaulting = true
+				p.RotationVel = 0.35 // Кувырок вправо (по часовой)
 			}
 
-			// horizontal movement
 			baseSpeed := 0.0
-			if p.Inputs.A {
-				baseSpeed = -10.0
-			}
-			if p.Inputs.D {
-				baseSpeed = 10.0
-			}
+			if p.Inputs.A { baseSpeed = -10.0 }
+			if p.Inputs.D { baseSpeed = 10.0 }
 
 			p.VelocityX = baseSpeed + p.DashVelocity
 			p.Pos.X += p.VelocityX
-			p.DashVelocity *= 0.85 // rapid decay for snappy dashes
+			p.DashVelocity *= 0.85
 
-			// bounds
-			if p.Pos.X < 0 {
-				p.Pos.X = 0
-			}
-			if p.Pos.X > canvasWidth-p.Width {
-				p.Pos.X = canvasWidth - p.Width
-			}
+			// Границы карты
+			if p.Pos.X < 0 { p.Pos.X = 0 }
+			if p.Pos.X > canvasWidth-p.Width { p.Pos.X = canvasWidth - p.Width }
 			if p.Side == "left" {
-				if p.Pos.X > canvasWidth/2-p.Width-10 {
-					p.Pos.X = canvasWidth/2 - p.Width - 10
-				}
+				if p.Pos.X > canvasWidth/2-p.Width-10 { p.Pos.X = canvasWidth/2 - p.Width - 10 }
 			} else {
-				if p.Pos.X < canvasWidth/2+10 {
-					p.Pos.X = canvasWidth/2 + 10
-				}
+				if p.Pos.X < canvasWidth/2+10 { p.Pos.X = canvasWidth/2 + 10 }
 			}
 
-			// vertical & jump mechanics (edge detection on W)
+			// Логика прыжков и двойных прыжков (с сальто вперед)
 			justPressedW := p.Inputs.W && !p.PrevW
 			p.PrevW = p.Inputs.W
 
@@ -161,46 +144,58 @@ func gameLoop() {
 				} else if p.CanDoubleJump {
 					p.VelocityY = -16.0
 					p.CanDoubleJump = false
-					p.IsSomersaulting = true
+					// Сальто вперед в зависимости от стороны
+					if p.Side == "left" {
+						p.RotationVel = 0.25 // Лицом направо -> крутим по часовой
+					} else {
+						p.RotationVel = -0.25 // Лицом налево -> крутим против часовой
+					}
 				}
 			}
 
-			// block mechanic
+			// Блок в воздухе
 			p.IsBlocking = p.Inputs.S && p.IsJumping
 			if p.IsBlocking {
-				p.VelocityY += 1.8 // fast fall while blocking
+				p.VelocityY += 1.8 
 			} else {
-				p.VelocityY += 0.6 // floatier standard gravity
+				p.VelocityY += 0.6 
 			}
-
+			
 			p.Pos.Y += p.VelocityY
 
-			// ground collision
+			// Приземление
 			if p.Pos.Y >= playerGroundY {
+				if p.IsJumping {
+					// Если мы ТОЛЬКО ЧТО приземлились, сбрасываем сальто на ноги
+					p.Rotation = 0
+					p.RotationVel = 0
+				}
 				p.Pos.Y = playerGroundY
 				p.VelocityY = 0
 				p.IsJumping = false
-				p.IsSomersaulting = false
 				p.IsBlocking = false
 				p.CanDoubleJump = true
-				p.DashesLeft = 2 // reset dashes on ground
+				p.DashesLeft = 2 // На земле дэши бесконечные (сразу восстанавливаются)
 			}
 
-			// animation state (rotation)
-			if p.IsSomersaulting {
+			// АНИМАЦИЯ: Точное вычисление углов
+			if p.IsBlocking {
+				// Блок наклоняет на 45 градусов и отменяет любое сальто
 				if p.Side == "left" {
-					p.Rotation += 0.35
-				} else {
-					p.Rotation -= 0.35
-				}
-			} else if p.IsBlocking {
-				if p.Side == "left" {
-					p.Rotation = math.Pi / 4 // 45 degrees
+					p.Rotation = math.Pi / 4
 				} else {
 					p.Rotation = -math.Pi / 4
 				}
+				p.RotationVel = 0
+			} else if p.RotationVel != 0 {
+				// Крутимся
+				p.Rotation += p.RotationVel
+				// Проверяем, сделали ли мы полный оборот (360 градусов = 2*Pi)
+				if math.Abs(p.Rotation) >= 2*math.Pi {
+					p.Rotation = 0
+					p.RotationVel = 0 // Останавливаем вращение точно на ногах
+				}
 			} else {
-				// reset rotation
 				p.Rotation = 0
 			}
 		}
@@ -216,11 +211,9 @@ func gameLoop() {
 			continue
 		}
 
-		// 2. ball physics
+		// 2. Физика мяча
 		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.02)
-		if dynamicGravity > 1.2 {
-			dynamicGravity = 1.2
-		}
+		if dynamicGravity > 1.2 { dynamicGravity = 1.2 }
 
 		state.Ball.Velocity.Y += dynamicGravity
 		state.Ball.Pos.X += state.Ball.Velocity.X
@@ -248,7 +241,7 @@ func gameLoop() {
 			resetTicks = 120
 		}
 
-		// 3. ball vs player collisions (proper impulse physics)
+		// 3. Столкновение мяча и игроков
 		for _, p := range state.Players {
 			closestX := math.Max(p.Pos.X, math.Min(state.Ball.Pos.X, p.Pos.X+p.Width))
 			closestY := math.Max(p.Pos.Y, math.Min(state.Ball.Pos.Y, p.Pos.Y+p.Height))
@@ -259,59 +252,43 @@ func gameLoop() {
 
 			if distSquared < (state.Ball.Radius * state.Ball.Radius) {
 				dist := math.Sqrt(distSquared)
-				if dist == 0 {
-					dist = 0.1
-				}
+				if dist == 0 { dist = 0.1 }
 
-				// collision normal (pointing from player to ball)
 				nx := distX / dist
 				ny := distY / dist
 
-				// push ball out of player to prevent sticking
 				penetration := state.Ball.Radius - dist
 				state.Ball.Pos.X += nx * penetration
 				state.Ball.Pos.Y += ny * penetration
 
-				// calculate relative velocity
 				relVelX := state.Ball.Velocity.X - p.VelocityX
 				relVelY := state.Ball.Velocity.Y - p.VelocityY
 
-				// velocity along the normal
 				dot := relVelX*nx + relVelY*ny
 
-				// only resolve if objects are moving towards each other
 				if dot < 0 {
-					restitution := 0.8 // default bounce
-
+					restitution := 0.8 
+					
 					if p.IsBlocking {
-						restitution = 0.2 // deaden the ball
-						// force deflection forward and down
-						if p.Side == "left" {
-							nx = 0.8
-							ny = 0.5
-						} else {
-							nx = -0.8
-							ny = 0.5
-						}
-					} else if p.IsSomersaulting {
-						restitution = 1.6 // smash multiplier!
+						restitution = 0.2 // Мягкий блок гасит скорость
+						if p.Side == "left" { nx = 0.8; ny = 0.5 } else { nx = -0.8; ny = 0.5 }
+					} else if p.RotationVel != 0 {
+						restitution = 1.6 // Если в момент удара мы крутимся - это мощный смэш!
 					}
 
-					// calculate impulse and apply to ball
 					impulse := -(1 + restitution) * dot
 					state.Ball.Velocity.X += impulse * nx
 					state.Ball.Velocity.Y += impulse * ny
 
-					// transfer a portion of player's momentum for control (allows juggling)
 					state.Ball.Velocity.X += p.VelocityX * 0.3
 					state.Ball.Velocity.Y += p.VelocityY * 0.3
-
+					
 					state.Ball.HitCount++
 				}
 			}
 		}
 
-		// 4. ball vs net
+		// 4. Мяч и сетка
 		closestNetX := math.Max(netX, math.Min(state.Ball.Pos.X, netX+netWidth))
 		closestNetY := math.Max(netY, math.Min(state.Ball.Pos.Y, netY+netHeight))
 
@@ -321,9 +298,7 @@ func gameLoop() {
 
 		if distNetSquared < (state.Ball.Radius * state.Ball.Radius) {
 			dist := math.Sqrt(distNetSquared)
-			if dist == 0 {
-				dist = 0.1
-			}
+			if dist == 0 { dist = 0.1 }
 
 			nx := distNetX / dist
 			ny := distNetY / dist
@@ -354,7 +329,9 @@ func resetRound(canvasWidth float64, groundY float64) {
 		}
 		p.VelocityY = 0
 		p.VelocityX = 0
+		p.DashVelocity = 0
 		p.Rotation = 0
+		p.RotationVel = 0
 		p.IsJumping = false
 		p.CanDoubleJump = true
 		p.DashesLeft = 2
