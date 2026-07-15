@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// websocket upgrader
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
@@ -30,7 +31,6 @@ type Inputs struct {
 	DashR bool `json:"dashR"`
 }
 
-// Обновленный стейт игрока (убрали IsSomersaulting, добавили RotationVel)
 type PlayerState struct {
 	Id            string  `json:"id"`
 	Pos           Vector2 `json:"pos"`
@@ -38,7 +38,7 @@ type PlayerState struct {
 	VelocityY     float64 `json:"velocityY"`
 	DashVelocity  float64 `json:"-"`
 	Rotation      float64 `json:"rotation"`
-	RotationVel   float64 `json:"-"` // Скорость текущего переката/сальто
+	RotationVel   float64 `json:"-"`
 	IsJumping     bool    `json:"isJumping"`
 	CanDoubleJump bool    `json:"-"`
 	IsBlocking    bool    `json:"isBlocking"`
@@ -60,18 +60,21 @@ type BallState struct {
 }
 
 type GameState struct {
-	Players map[string]*PlayerState `json:"players"`
-	Ball    BallState               `json:"ball"`
-	Score   map[string]int          `json:"score"`
-	State   string                  `json:"state"`
+	Players   map[string]*PlayerState `json:"players"`
+	Ball      BallState               `json:"ball"`
+	Score     map[string]int          `json:"score"`
+	State     string                  `json:"state"`
+	ServeSide string                  `json:"serveSide"` // track whose serve it is
 }
 
 var (
 	state = GameState{
 		Players: make(map[string]*PlayerState),
-		Ball:    BallState{Pos: Vector2{X: 800, Y: 200}, Velocity: Vector2{X: 0, Y: 0}, Radius: 45, HitCount: 0},
-		Score:   map[string]int{"left": 0, "right": 0},
-		State:   "playing",
+		// radius increased to 65 (beach ball size)
+		Ball:      BallState{Pos: Vector2{X: 400, Y: 150}, Velocity: Vector2{X: 0, Y: 0}, Radius: 65, HitCount: 0},
+		Score:     map[string]int{"left": 0, "right": 0},
+		State:     "playing",
+		ServeSide: "left", // left player serves first
 	}
 	stateMutex sync.Mutex
 	clients    = make(map[*websocket.Conn]string)
@@ -93,7 +96,7 @@ func gameLoop() {
 	for range ticker.C {
 		stateMutex.Lock()
 
-		// 1. Обработка игроков
+		// 1. process players
 		for _, p := range state.Players {
 			playerGroundY := groundY - p.Height
 
@@ -101,18 +104,17 @@ func gameLoop() {
 				p.DashCooldown--
 			}
 
-			// Логика дэшей (назначаем скорость движения и скорость вращения)
 			if p.Inputs.DashL && p.DashesLeft > 0 && p.DashCooldown <= 0 {
 				p.DashVelocity = -35.0
 				p.DashesLeft--
 				p.DashCooldown = 30
-				p.RotationVel = -0.35 // Кувырок влево (против часовой)
+				p.RotationVel = -0.35
 			}
 			if p.Inputs.DashR && p.DashesLeft > 0 && p.DashCooldown <= 0 {
 				p.DashVelocity = 35.0
 				p.DashesLeft--
 				p.DashCooldown = 30
-				p.RotationVel = 0.35 // Кувырок вправо (по часовой)
+				p.RotationVel = 0.35
 			}
 
 			baseSpeed := 0.0
@@ -123,7 +125,6 @@ func gameLoop() {
 			p.Pos.X += p.VelocityX
 			p.DashVelocity *= 0.85
 
-			// Границы карты
 			if p.Pos.X < 0 { p.Pos.X = 0 }
 			if p.Pos.X > canvasWidth-p.Width { p.Pos.X = canvasWidth - p.Width }
 			if p.Side == "left" {
@@ -132,7 +133,6 @@ func gameLoop() {
 				if p.Pos.X < canvasWidth/2+10 { p.Pos.X = canvasWidth/2 + 10 }
 			}
 
-			// Логика прыжков и двойных прыжков (с сальто вперед)
 			justPressedW := p.Inputs.W && !p.PrevW
 			p.PrevW = p.Inputs.W
 
@@ -144,16 +144,14 @@ func gameLoop() {
 				} else if p.CanDoubleJump {
 					p.VelocityY = -16.0
 					p.CanDoubleJump = false
-					// Сальто вперед в зависимости от стороны
 					if p.Side == "left" {
-						p.RotationVel = 0.25 // Лицом направо -> крутим по часовой
+						p.RotationVel = 0.25
 					} else {
-						p.RotationVel = -0.25 // Лицом налево -> крутим против часовой
+						p.RotationVel = -0.25
 					}
 				}
 			}
 
-			// Блок в воздухе
 			p.IsBlocking = p.Inputs.S && p.IsJumping
 			if p.IsBlocking {
 				p.VelocityY += 1.8 
@@ -163,10 +161,8 @@ func gameLoop() {
 			
 			p.Pos.Y += p.VelocityY
 
-			// Приземление
 			if p.Pos.Y >= playerGroundY {
 				if p.IsJumping {
-					// Если мы ТОЛЬКО ЧТО приземлились, сбрасываем сальто на ноги
 					p.Rotation = 0
 					p.RotationVel = 0
 				}
@@ -175,12 +171,10 @@ func gameLoop() {
 				p.IsJumping = false
 				p.IsBlocking = false
 				p.CanDoubleJump = true
-				p.DashesLeft = 2 // На земле дэши бесконечные (сразу восстанавливаются)
+				p.DashesLeft = 2
 			}
 
-			// АНИМАЦИЯ: Точное вычисление углов
 			if p.IsBlocking {
-				// Блок наклоняет на 45 градусов и отменяет любое сальто
 				if p.Side == "left" {
 					p.Rotation = math.Pi / 4
 				} else {
@@ -188,12 +182,10 @@ func gameLoop() {
 				}
 				p.RotationVel = 0
 			} else if p.RotationVel != 0 {
-				// Крутимся
 				p.Rotation += p.RotationVel
-				// Проверяем, сделали ли мы полный оборот (360 градусов = 2*Pi)
 				if math.Abs(p.Rotation) >= 2*math.Pi {
 					p.Rotation = 0
-					p.RotationVel = 0 // Останавливаем вращение точно на ногах
+					p.RotationVel = 0
 				}
 			} else {
 				p.Rotation = 0
@@ -211,13 +203,20 @@ func gameLoop() {
 			continue
 		}
 
-		// 2. Физика мяча
-		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.02)
-		if dynamicGravity > 1.2 { dynamicGravity = 1.2 }
+		// 2. ball physics
+		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.01) // slightly slowed down gravity growth
+		if dynamicGravity > 1.0 { dynamicGravity = 1.0 }
 
 		state.Ball.Velocity.Y += dynamicGravity
 		state.Ball.Pos.X += state.Ball.Velocity.X
 		state.Ball.Pos.Y += state.Ball.Velocity.Y
+
+		// hard limit on max ball speed (terminal velocity)
+		maxBallSpeed := 32.0
+		if state.Ball.Velocity.X > maxBallSpeed { state.Ball.Velocity.X = maxBallSpeed }
+		if state.Ball.Velocity.X < -maxBallSpeed { state.Ball.Velocity.X = -maxBallSpeed }
+		if state.Ball.Velocity.Y > maxBallSpeed { state.Ball.Velocity.Y = maxBallSpeed }
+		if state.Ball.Velocity.Y < -maxBallSpeed { state.Ball.Velocity.Y = -maxBallSpeed }
 
 		if state.Ball.Pos.X < state.Ball.Radius {
 			state.Ball.Pos.X = state.Ball.Radius
@@ -232,16 +231,19 @@ func gameLoop() {
 			state.Ball.Pos.Y = groundY - state.Ball.Radius
 			state.Ball.Velocity.Y *= -0.3
 
+			// determine the server for the next round
 			if state.Ball.Pos.X < canvasWidth/2 {
 				state.Score["right"]++
+				state.ServeSide = "right"
 			} else {
 				state.Score["left"]++
+				state.ServeSide = "left"
 			}
 			state.State = "scored"
 			resetTicks = 120
 		}
 
-		// 3. Столкновение мяча и игроков
+		// 3. ball vs player collisions (improved dampening)
 		for _, p := range state.Players {
 			closestX := math.Max(p.Pos.X, math.Min(state.Ball.Pos.X, p.Pos.X+p.Width))
 			closestY := math.Max(p.Pos.Y, math.Min(state.Ball.Pos.Y, p.Pos.Y+p.Height))
@@ -267,28 +269,29 @@ func gameLoop() {
 				dot := relVelX*nx + relVelY*ny
 
 				if dot < 0 {
-					restitution := 0.8 
+					restitution := 0.5 // reduced base bounce (was 0.8)
 					
 					if p.IsBlocking {
-						restitution = 0.2 // Мягкий блок гасит скорость
+						restitution = 0.1 // hard block
 						if p.Side == "left" { nx = 0.8; ny = 0.5 } else { nx = -0.8; ny = 0.5 }
 					} else if p.RotationVel != 0 {
-						restitution = 1.6 // Если в момент удара мы крутимся - это мощный смэш!
+						restitution = 1.0 // smash became more adequate (was 1.6)
 					}
 
 					impulse := -(1 + restitution) * dot
 					state.Ball.Velocity.X += impulse * nx
 					state.Ball.Velocity.Y += impulse * ny
 
-					state.Ball.Velocity.X += p.VelocityX * 0.3
-					state.Ball.Velocity.Y += p.VelocityY * 0.3
+					// transfer less player speed to the ball for better control
+					state.Ball.Velocity.X += p.VelocityX * 0.15
+					state.Ball.Velocity.Y += p.VelocityY * 0.15
 					
 					state.Ball.HitCount++
 				}
 			}
 		}
 
-		// 4. Мяч и сетка
+		// 4. ball vs net
 		closestNetX := math.Max(netX, math.Min(state.Ball.Pos.X, netX+netWidth))
 		closestNetY := math.Max(netY, math.Min(state.Ball.Pos.Y, netY+netHeight))
 
@@ -317,7 +320,13 @@ func gameLoop() {
 }
 
 func resetRound(canvasWidth float64, groundY float64) {
-	state.Ball.Pos = Vector2{X: canvasWidth / 2, Y: 200}
+	// spawn on the server's side
+	spawnX := 400.0
+	if state.ServeSide == "right" {
+		spawnX = canvasWidth - 400.0
+	}
+
+	state.Ball.Pos = Vector2{X: spawnX, Y: 150} // high above the head
 	state.Ball.Velocity = Vector2{X: 0, Y: 0}
 	state.Ball.HitCount = 0
 
