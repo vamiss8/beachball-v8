@@ -64,17 +64,16 @@ type GameState struct {
 	Ball      BallState               `json:"ball"`
 	Score     map[string]int          `json:"score"`
 	State     string                  `json:"state"`
-	ServeSide string                  `json:"serveSide"` // track whose serve it is
+	ServeSide string                  `json:"serveSide"`
 }
 
 var (
 	state = GameState{
-		Players: make(map[string]*PlayerState),
-		// radius increased to 65 (beach ball size)
+		Players:   make(map[string]*PlayerState),
 		Ball:      BallState{Pos: Vector2{X: 400, Y: 150}, Velocity: Vector2{X: 0, Y: 0}, Radius: 65, HitCount: 0},
 		Score:     map[string]int{"left": 0, "right": 0},
 		State:     "playing",
-		ServeSide: "left", // left player serves first
+		ServeSide: "left",
 	}
 	stateMutex sync.Mutex
 	clients    = make(map[*websocket.Conn]string)
@@ -204,15 +203,15 @@ func gameLoop() {
 		}
 
 		// 2. ball physics
-		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.01) // slightly slowed down gravity growth
-		if dynamicGravity > 1.0 { dynamicGravity = 1.0 }
+		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.01)
+		if dynamicGravity > 0.8 { dynamicGravity = 0.8 } // lowered max gravity
 
 		state.Ball.Velocity.Y += dynamicGravity
 		state.Ball.Pos.X += state.Ball.Velocity.X
 		state.Ball.Pos.Y += state.Ball.Velocity.Y
 
-		// hard limit on max ball speed (terminal velocity)
-		maxBallSpeed := 32.0
+		// anti-space terminal velocity (clamped to 22.0, was 32.0)
+		maxBallSpeed := 22.0
 		if state.Ball.Velocity.X > maxBallSpeed { state.Ball.Velocity.X = maxBallSpeed }
 		if state.Ball.Velocity.X < -maxBallSpeed { state.Ball.Velocity.X = -maxBallSpeed }
 		if state.Ball.Velocity.Y > maxBallSpeed { state.Ball.Velocity.Y = maxBallSpeed }
@@ -231,7 +230,6 @@ func gameLoop() {
 			state.Ball.Pos.Y = groundY - state.Ball.Radius
 			state.Ball.Velocity.Y *= -0.3
 
-			// determine the server for the next round
 			if state.Ball.Pos.X < canvasWidth/2 {
 				state.Score["right"]++
 				state.ServeSide = "right"
@@ -243,7 +241,7 @@ func gameLoop() {
 			resetTicks = 120
 		}
 
-		// 3. ball vs player collisions (improved dampening)
+		// 3. ball vs player collisions
 		for _, p := range state.Players {
 			closestX := math.Max(p.Pos.X, math.Min(state.Ball.Pos.X, p.Pos.X+p.Width))
 			closestY := math.Max(p.Pos.Y, math.Min(state.Ball.Pos.Y, p.Pos.Y+p.Height))
@@ -269,23 +267,39 @@ func gameLoop() {
 				dot := relVelX*nx + relVelY*ny
 
 				if dot < 0 {
-					restitution := 0.5 // reduced base bounce (was 0.8)
+					restitution := 0.4 // base bounce
 					
-					if p.IsBlocking {
-						restitution = 0.1 // hard block
-						if p.Side == "left" { nx = 0.8; ny = 0.5 } else { nx = -0.8; ny = 0.5 }
-					} else if p.RotationVel != 0 {
-						restitution = 1.0 // smash became more adequate (was 1.6)
+					// head balance mechanics (ball is above player)
+					if ny < -0.7 {
+						restitution = 0.0 // deaden bounce completely on top
+						
+						// sticky friction: if resting, drag the ball horizontally
+						if math.Abs(state.Ball.Velocity.Y) < 5.0 {
+							state.Ball.Velocity.X += (p.VelocityX - state.Ball.Velocity.X) * 0.7
+						}
 					}
 
-					impulse := -(1 + restitution) * dot
+					// block and smash mechanics
+					if p.IsBlocking {
+						restitution = 0.1
+						// fixed negative ny to push ball UP and forward
+						if p.Side == "left" { nx = 0.8; ny = -0.6 } else { nx = -0.8; ny = -0.6 }
+					} else if p.RotationVel != 0 {
+						restitution = 0.9 // smash
+					}
+
+					// jump impact clamp (prevents launching to space)
+					cappedDot := dot
+					if cappedDot < -16.0 {
+						cappedDot = -16.0 
+					}
+
+					impulse := -(1 + restitution) * cappedDot
 					state.Ball.Velocity.X += impulse * nx
 					state.Ball.Velocity.Y += impulse * ny
 
-					// transfer less player speed to the ball for better control
-					state.Ball.Velocity.X += p.VelocityX * 0.15
-					state.Ball.Velocity.Y += p.VelocityY * 0.15
-					
+					// minimal horizontal transfer on standard hits
+					state.Ball.Velocity.X += p.VelocityX * 0.1
 					state.Ball.HitCount++
 				}
 			}
@@ -320,13 +334,12 @@ func gameLoop() {
 }
 
 func resetRound(canvasWidth float64, groundY float64) {
-	// spawn on the server's side
 	spawnX := 400.0
 	if state.ServeSide == "right" {
 		spawnX = canvasWidth - 400.0
 	}
 
-	state.Ball.Pos = Vector2{X: spawnX, Y: 150} // high above the head
+	state.Ball.Pos = Vector2{X: spawnX, Y: 150}
 	state.Ball.Velocity = Vector2{X: 0, Y: 0}
 	state.Ball.HitCount = 0
 
