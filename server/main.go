@@ -60,22 +60,20 @@ type BallState struct {
 }
 
 type GameState struct {
-	Players     map[string]*PlayerState `json:"players"`
-	Ball        BallState               `json:"ball"`
-	Score       map[string]int          `json:"score"`
-	State       string                  `json:"state"`
-	ServeSide   string                  `json:"serveSide"`
-	ServeActive bool                    `json:"serveActive"`
+	Players   map[string]*PlayerState `json:"players"`
+	Ball      BallState               `json:"ball"`
+	Score     map[string]int          `json:"score"`
+	State     string                  `json:"state"`
+	ServeSide string                  `json:"serveSide"`
 }
 
 var (
 	state = GameState{
-		Players:     make(map[string]*PlayerState),
-		Ball:        BallState{Pos: Vector2{X: 400, Y: 150}, Velocity: Vector2{X: 0, Y: 0}, Radius: 65, HitCount: 0},
-		Score:       map[string]int{"left": 0, "right": 0},
-		State:       "playing",
-		ServeSide:   "left",
-		ServeActive: false,
+		Players:   make(map[string]*PlayerState),
+		Ball:      BallState{Pos: Vector2{X: 400, Y: 150}, Velocity: Vector2{X: 0, Y: 0}, Radius: 65, HitCount: 0},
+		Score:     map[string]int{"left": 0, "right": 0},
+		State:     "playing",
+		ServeSide: "left",
 	}
 	stateMutex sync.Mutex
 	clients    = make(map[*websocket.Conn]string)
@@ -119,31 +117,19 @@ func gameLoop() {
 			}
 
 			baseSpeed := 0.0
-			if p.Inputs.A {
-				baseSpeed = -10.0
-			}
-			if p.Inputs.D {
-				baseSpeed = 10.0
-			}
+			if p.Inputs.A { baseSpeed = -10.0 }
+			if p.Inputs.D { baseSpeed = 10.0 }
 
 			p.VelocityX = baseSpeed + p.DashVelocity
 			p.Pos.X += p.VelocityX
 			p.DashVelocity *= 0.85
 
-			if p.Pos.X < 0 {
-				p.Pos.X = 0
-			}
-			if p.Pos.X > canvasWidth-p.Width {
-				p.Pos.X = canvasWidth - p.Width
-			}
+			if p.Pos.X < 0 { p.Pos.X = 0 }
+			if p.Pos.X > canvasWidth-p.Width { p.Pos.X = canvasWidth - p.Width }
 			if p.Side == "left" {
-				if p.Pos.X > canvasWidth/2-p.Width-10 {
-					p.Pos.X = canvasWidth/2 - p.Width - 10
-				}
+				if p.Pos.X > canvasWidth/2-p.Width-10 { p.Pos.X = canvasWidth/2 - p.Width - 10 }
 			} else {
-				if p.Pos.X < canvasWidth/2+10 {
-					p.Pos.X = canvasWidth/2 + 10
-				}
+				if p.Pos.X < canvasWidth/2+10 { p.Pos.X = canvasWidth/2 + 10 }
 			}
 
 			justPressedW := p.Inputs.W && !p.PrevW
@@ -167,11 +153,11 @@ func gameLoop() {
 
 			p.IsBlocking = p.Inputs.S && p.IsJumping
 			if p.IsBlocking {
-				p.VelocityY += 1.8
+				p.VelocityY += 1.8 
 			} else {
-				p.VelocityY += 0.6
+				p.VelocityY += 0.6 
 			}
-
+			
 			p.Pos.Y += p.VelocityY
 
 			if p.Pos.Y >= playerGroundY {
@@ -217,43 +203,21 @@ func gameLoop() {
 		}
 
 		// 2. ball physics
-
-		// only apply gravity and movement if the serve has been hit
-		if state.ServeActive {
-			dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.01)
-			if dynamicGravity > 0.8 {
-				dynamicGravity = 0.8
-			}
-
-			state.Ball.Velocity.Y += dynamicGravity
-			state.Ball.Pos.X += state.Ball.Velocity.X
-			state.Ball.Pos.Y += state.Ball.Velocity.Y
-		}
-
-		dynamicGravity := 0.2 + (float64(state.Ball.HitCount) * 0.01)
-		if dynamicGravity > 0.8 {
-			dynamicGravity = 0.8
-		} // lowered max gravity
+		dynamicGravity := 0.3 + (float64(state.Ball.HitCount) * 0.01)
+		if dynamicGravity > 0.9 { dynamicGravity = 0.9 }
 
 		state.Ball.Velocity.Y += dynamicGravity
 		state.Ball.Pos.X += state.Ball.Velocity.X
 		state.Ball.Pos.Y += state.Ball.Velocity.Y
 
-		// anti-space terminal velocity (clamped to 22.0, was 32.0)
-		maxBallSpeed := 22.0
-		if state.Ball.Velocity.X > maxBallSpeed {
-			state.Ball.Velocity.X = maxBallSpeed
-		}
-		if state.Ball.Velocity.X < -maxBallSpeed {
-			state.Ball.Velocity.X = -maxBallSpeed
-		}
-		if state.Ball.Velocity.Y > maxBallSpeed {
-			state.Ball.Velocity.Y = maxBallSpeed
-		}
-		if state.Ball.Velocity.Y < -maxBallSpeed {
-			state.Ball.Velocity.Y = -maxBallSpeed
-		}
+		// terminal velocity to prevent game-breaking speeds
+		maxBallSpeed := 25.0
+		if state.Ball.Velocity.X > maxBallSpeed { state.Ball.Velocity.X = maxBallSpeed }
+		if state.Ball.Velocity.X < -maxBallSpeed { state.Ball.Velocity.X = -maxBallSpeed }
+		if state.Ball.Velocity.Y > maxBallSpeed { state.Ball.Velocity.Y = maxBallSpeed }
+		if state.Ball.Velocity.Y < -maxBallSpeed { state.Ball.Velocity.Y = -maxBallSpeed }
 
+		// walls
 		if state.Ball.Pos.X < state.Ball.Radius {
 			state.Ball.Pos.X = state.Ball.Radius
 			state.Ball.Velocity.X *= -0.8
@@ -263,6 +227,7 @@ func gameLoop() {
 			state.Ball.Velocity.X *= -0.8
 		}
 
+		// floor (scoring)
 		if state.Ball.Pos.Y > groundY-state.Ball.Radius {
 			state.Ball.Pos.Y = groundY - state.Ball.Radius
 			state.Ball.Velocity.Y *= -0.3
@@ -288,65 +253,47 @@ func gameLoop() {
 			distSquared := (distX * distX) + (distY * distY)
 
 			if distSquared < (state.Ball.Radius * state.Ball.Radius) {
-				state.ServeActive = true // activate ball on first touch
-
 				dist := math.Sqrt(distSquared)
-				if dist == 0 {
-					dist = 0.1
-				}
+				if dist == 0 { dist = 0.1 }
 
+				// normal vector
 				nx := distX / dist
 				ny := distY / dist
 
+				// resolve penetration immediately
 				penetration := state.Ball.Radius - dist
 				state.Ball.Pos.X += nx * penetration
 				state.Ball.Pos.Y += ny * penetration
 
 				relVelX := state.Ball.Velocity.X - p.VelocityX
 				relVelY := state.Ball.Velocity.Y - p.VelocityY
-
 				dot := relVelX*nx + relVelY*ny
 
+				// only apply impulse if objects are moving towards each other
 				if dot < 0 {
-					restitution := 0.4 // base bounce
+					restitution := 0.65 // solid bounce
 
-					// head balance mechanics (ball is above player)
-					if ny < -0.7 {
-						restitution = 0.0 // deaden bounce completely on top
-
-						// sticky friction: if resting, drag the ball horizontally
-						if math.Abs(state.Ball.Velocity.Y) < 5.0 {
-							state.Ball.Velocity.X += (p.VelocityX - state.Ball.Velocity.X) * 0.7
-						}
-					}
-
-					// block and smash mechanics
 					if p.IsBlocking {
 						restitution = 0.1
-						// fixed negative ny to push ball UP and forward
-						if p.Side == "left" {
-							nx = 0.8
-							ny = -0.6
-						} else {
-							nx = -0.8
-							ny = -0.6
-						}
 					} else if p.RotationVel != 0 {
-						restitution = 0.9 // smash
+						restitution = 1.0 // smash
 					}
 
-					// jump impact clamp (prevents launching to space)
-					cappedDot := dot
-					if cappedDot < -16.0 {
-						cappedDot = -16.0
+					// clamp the impact force to prevent space launches on double jumps
+					if dot < -22.0 {
+						dot = -22.0
 					}
 
-					impulse := -(1 + restitution) * cappedDot
+					impulse := -(1 + restitution) * dot
 					state.Ball.Velocity.X += impulse * nx
 					state.Ball.Velocity.Y += impulse * ny
 
-					// minimal horizontal transfer on standard hits
-					state.Ball.Velocity.X += p.VelocityX * 0.1
+					// transfer a small, fixed amount of player velocity to guide the ball
+					state.Ball.Velocity.X += p.VelocityX * 0.25
+					if p.VelocityY < 0 {
+						state.Ball.Velocity.Y += p.VelocityY * 0.15
+					}
+
 					state.Ball.HitCount++
 				}
 			}
@@ -362,9 +309,7 @@ func gameLoop() {
 
 		if distNetSquared < (state.Ball.Radius * state.Ball.Radius) {
 			dist := math.Sqrt(distNetSquared)
-			if dist == 0 {
-				dist = 0.1
-			}
+			if dist == 0 { dist = 0.1 }
 
 			nx := distNetX / dist
 			ny := distNetY / dist
@@ -373,7 +318,7 @@ func gameLoop() {
 			state.Ball.Pos.Y += ny * penetration
 
 			dotProduct := state.Ball.Velocity.X*nx + state.Ball.Velocity.Y*ny
-			bounce := 0.4
+			bounce := 0.3 // softer net
 			state.Ball.Velocity.X = (state.Ball.Velocity.X - 2*dotProduct*nx) * bounce
 			state.Ball.Velocity.Y = (state.Ball.Velocity.Y - 2*dotProduct*ny) * bounce
 		}
@@ -391,7 +336,6 @@ func resetRound(canvasWidth float64, groundY float64) {
 	state.Ball.Pos = Vector2{X: spawnX, Y: 150}
 	state.Ball.Velocity = Vector2{X: 0, Y: 0}
 	state.Ball.HitCount = 0
-	state.ServeActive = false // reset hover state
 
 	for _, p := range state.Players {
 		if p.Side == "left" {
