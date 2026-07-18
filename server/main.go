@@ -65,6 +65,7 @@ type GameState struct {
 	Score     map[string]int          `json:"score"`
 	State     string                  `json:"state"`
 	ServeSide string                  `json:"serveSide"`
+	ServeActive bool                    `json:"serveActive"` // flag to hold ball in air before serve
 }
 
 var (
@@ -74,6 +75,7 @@ var (
 		Score:     map[string]int{"left": 0, "right": 0},
 		State:     "playing",
 		ServeSide: "left",
+		ServeActive: false, // ball hovers at start
 	}
 	stateMutex sync.Mutex
 	clients    = make(map[*websocket.Conn]string)
@@ -203,6 +205,15 @@ func gameLoop() {
 		}
 
 		// 2. ball physics
+		if state.ServeActive {
+			dynamicGravity := 0.3 + (float64(state.Ball.HitCount) * 0.01)
+			if dynamicGravity > 0.9 { dynamicGravity = 0.9 }
+
+			state.Ball.Velocity.Y += dynamicGravity
+			state.Ball.Pos.X += state.Ball.Velocity.X
+			state.Ball.Pos.Y += state.Ball.Velocity.Y
+		}
+
 		dynamicGravity := 0.3 + (float64(state.Ball.HitCount) * 0.01)
 		if dynamicGravity > 0.9 { dynamicGravity = 0.9 }
 
@@ -253,6 +264,8 @@ func gameLoop() {
 			distSquared := (distX * distX) + (distY * distY)
 
 			if distSquared < (state.Ball.Radius * state.Ball.Radius) {
+				state.ServeActive = true // activate physics on first touch
+
 				dist := math.Sqrt(distSquared)
 				if dist == 0 { dist = 0.1 }
 
@@ -336,6 +349,7 @@ func resetRound(canvasWidth float64, groundY float64) {
 	state.Ball.Pos = Vector2{X: spawnX, Y: 150}
 	state.Ball.Velocity = Vector2{X: 0, Y: 0}
 	state.Ball.HitCount = 0
+	state.ServeActive = false // freeze ball for the new serve
 
 	for _, p := range state.Players {
 		if p.Side == "left" {
