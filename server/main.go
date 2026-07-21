@@ -312,7 +312,7 @@ func gameLoop() {
 			}
 		}
 
-		// 4. ball vs net
+		// 4. ball vs net (and penetr)
 		closestNetX := math.Max(netX, math.Min(state.Ball.Pos.X, netX+netWidth))
 		closestNetY := math.Max(netY, math.Min(state.Ball.Pos.Y, netY+netHeight))
 
