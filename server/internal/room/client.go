@@ -110,7 +110,12 @@ func (c *Client) readPump() {
 	for {
 		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+			// browsers usually close without a status code, so 1005 is a
+			// normal goodbye here and not worth logging as an error
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseNormalClosure,
+				websocket.CloseNoStatusReceived) {
 				log.Printf("room %s: read error from %s: %v", c.room.ID, c.describe(), err)
 			}
 			return
