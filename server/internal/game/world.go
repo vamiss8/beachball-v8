@@ -5,6 +5,12 @@ import "math"
 // World is the authoritative game state. it knows nothing about networking:
 // callers feed it inputs, call Step once per tick and serialise it.
 type World struct {
+	// Tick counts simulation steps since the world was created. the client
+	// uses it as its clock: snapshots arrive with jittery timing, tick
+	// numbers do not, so interpolation is driven by these instead of by
+	// local receive times.
+	Tick uint64 `json:"tick"`
+
 	Players   map[string]*Player `json:"players"`
 	Ball      Ball               `json:"ball"`
 	Score     map[Side]int       `json:"score"`
@@ -50,6 +56,8 @@ func (w *World) SideTaken(side Side) bool {
 
 // Step advances the whole simulation by exactly one tick.
 func (w *World) Step() {
+	w.Tick++
+
 	// players keep moving in every phase, so they can reposition between
 	// rallies instead of standing frozen
 	for _, p := range w.Players {
