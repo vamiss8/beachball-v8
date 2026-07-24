@@ -1,14 +1,34 @@
-html,
-body {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-  background: #102027;
+/* basic variables for configuring the theme faster */
+:root {
+  --bg-color: #1a1a1a;
+  --text-color: #ffffff;
+  --canvas-border: 2px solid #333;
+  --canvas-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
+/* without default browser margins */ 
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* centering the game on the screen */
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden; /* to prevent sudden scrolls */
+}
+
+/* configuring the canvas */
 canvas {
+  border: var(--canvas-border);
+  box-shadow: var(--canvas-shadow);
+  background-color: #000;
   display: block;
-  /* the canvas letterboxes the arena itself, so it just fills the window */
-  width: 100%;
-  height: 100%;
 }
