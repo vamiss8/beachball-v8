@@ -2,7 +2,7 @@ package game
 
 import "math"
 
-// Player is one paddle-ish character. fields tagged "-" are simulation
+// player is one paddle-ish character. fields tagged "-" are simulation
 // internals the client has no business knowing about.
 type Player struct {
 	ID   string `json:"id"`

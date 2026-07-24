@@ -1,4 +1,4 @@
-// Package protocol defines every message that crosses the websocket. keeping
+// package protocol defines every message that crosses the websocket. keeping
 // it in one place means the client and server can never drift apart silently.
 package protocol
 

@@ -2,7 +2,7 @@ package game
 
 import "math"
 
-// Ball is the one object both players fight over.
+// ball is the one object both players fight over.
 type Ball struct {
 	Pos      Vec2    `json:"pos"`
 	Velocity Vec2    `json:"velocity"`
