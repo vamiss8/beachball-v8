@@ -14,7 +14,7 @@ const (
 	SideRight Side = "right"
 )
 
-// Phase is the current stage of a rally.
+// Phase is the current stage of a voleyball rally in this context
 type Phase string
 
 const (

@@ -1,3 +1,4 @@
+// that's a test world not for game developing purposes, it does not deal with the project itself
 package game
 
 import "testing"

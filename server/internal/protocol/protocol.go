@@ -10,12 +10,12 @@ import (
 
 // message type tags
 const (
-	// server -> client
+	// from server to client
 	TypeWelcome = "welcome"
 	TypeState   = "state"
 	TypeError   = "error"
 
-	// client -> server
+	// from client to server
 	TypeInput = "input"
 )
 
