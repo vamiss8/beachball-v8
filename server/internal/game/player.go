@@ -102,7 +102,7 @@ func (p *Player) stepHorizontal() {
 	p.clampToOwnHalf()
 }
 
-// clampToOwnHalf keeps a player inside the arena and on their side of the net.
+// clampToOwnHalf keeps a player inside the arena and on their side of the net
 func (p *Player) clampToOwnHalf() {
 	minX, maxX := 0.0, ArenaWidth-PlayerWidth
 	if p.Side == SideLeft {
