@@ -47,15 +47,23 @@ export class Renderer {
     this.offsetX = (width - this.arena.width * this.scale) / 2;
     this.offsetY = (height - this.arena.height * this.scale) / 2;
     this.dpr = dpr;
+
+    // everything drawn below works in css pixels, the dpr lives in the
+    // canvas transform alone
+    this.viewWidth = width;
+    this.viewHeight = height;
   }
 
   draw(world, view) {
     const ctx = this.ctx;
 
+    // the canvas is sized in device pixels, so filling it with its own
+    // width and height under the dpr transform covers up to four times the
+    // area actually on screen
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
     ctx.fillStyle = '#102027';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
 
     ctx.save();
     ctx.translate(this.offsetX, this.offsetY);
