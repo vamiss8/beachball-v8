@@ -31,10 +31,10 @@ const (
 // Input is the raw key state sent by a client every tick. the server never
 // trusts anything else from the client, so this is the whole attack surface.
 type Input struct {
-	Left   bool `json:"left"`
-	Right  bool `json:"right"`
-	Jump   bool `json:"jump"`
-	Block  bool `json:"block"`
-	DashL  bool `json:"dashL"`
-	DashR  bool `json:"dashR"`
+	Left  bool `json:"left"`
+	Right bool `json:"right"`
+	Jump  bool `json:"jump"`
+	Block bool `json:"block"`
+	DashL bool `json:"dashL"`
+	DashR bool `json:"dashR"`
 }
