@@ -1,6 +1,9 @@
 // canvas rendering. draws whatever world it is handed and nothing else: no
 // rules, no prediction, no state of its own beyond cosmetics.
 
+// radians of fake ball spin per unit of horizontal speed per tick
+const BALL_SPIN_PER_TICK = 0.01;
+
 const COLORS = {
   skyTop: '#4fc3f7',
   skyBottom: '#b3e5fc',
@@ -26,6 +29,8 @@ export class Renderer {
     // cosmetic only: the server does not track ball spin, so it is faked
     // locally from horizontal speed
     this.ballSpin = 0;
+
+    this.lastTick = null;
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -56,6 +61,8 @@ export class Renderer {
 
   draw(world, view) {
     const ctx = this.ctx;
+
+    this.drawBall(world.ball, this.ticksSinceLastFrame(world.tick));
 
     // the canvas is sized in device pixels, so filling it with its own
     // width and height under the dpr transform covers up to four times the
@@ -152,25 +159,25 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawBall(ball) {
+  // how far the render clock moved since the previous frame, in ticks. the
+  // interpolated world already carries a fractional tick, so nothing else
+  // has to be timed here
+  ticksSinceLastFrame(tick) {
+    const previous = this.lastTick;
+    this.lastTick = tick;
+    // first frame, and a reconnect that restarts the counter, both spin by
+    // nothing rather than by a garbage delta
+    if (previous === null || tick < previous) return 0;
+    return tick - previous;
+  }
+
+  drawBall(ball, ticks) {
     const ctx = this.ctx;
 
-    this.ballSpin += ball.velocity.x * 0.01;
-
-    ctx.save();
-    ctx.translate(ball.pos.x, ball.pos.y);
-    ctx.rotate(this.ballSpin);
-
-    ctx.fillStyle = COLORS.ball;
-    circle(ctx, 0, 0, ball.radius);
-
-    ctx.strokeStyle = COLORS.ballStripe;
-    ctx.lineWidth = 6;
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.arc(0, 0, ball.radius * 0.72, (i * 2 * Math.PI) / 3, (i * 2 * Math.PI) / 3 + 1.1);
-      ctx.stroke();
-    }
+    // velocity is per tick, so the spin has to advance per tick too:
+    // accumulating once per animation frame made the ball spin twice as
+    // fast on a 120hz screen as on a 60hz one
+    this.ballSpin += ball.velocity.x * BALL_SPIN_PER_TICK * ticks;
 
     ctx.strokeStyle = COLORS.outline;
     ctx.lineWidth = 3;
