@@ -62,8 +62,6 @@ export class Renderer {
   draw(world, view) {
     const ctx = this.ctx;
 
-    this.drawBall(world.ball, this.ticksSinceLastFrame(world.tick));
-
     // the canvas is sized in device pixels, so filling it with its own
     // width and height under the dpr transform covers up to four times the
     // area actually on screen
@@ -83,7 +81,7 @@ export class Renderer {
       for (const player of Object.values(world.players)) {
         this.drawPlayer(player, player.id === view.playerId);
       }
-      this.drawBall(world.ball);
+      this.drawBall(world.ball, this.ticksSinceLastFrame(world.tick));
     }
 
     ctx.restore();
@@ -178,6 +176,21 @@ export class Renderer {
     // accumulating once per animation frame made the ball spin twice as
     // fast on a 120hz screen as on a 60hz one
     this.ballSpin += ball.velocity.x * BALL_SPIN_PER_TICK * ticks;
+
+    ctx.save();
+    ctx.translate(ball.pos.x, ball.pos.y);
+    ctx.rotate(this.ballSpin);
+
+    ctx.fillStyle = COLORS.ball;
+    circle(ctx, 0, 0, ball.radius);
+
+    ctx.strokeStyle = COLORS.ballStripe;
+    ctx.lineWidth = 6;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(0, 0, ball.radius * 0.72, (i * 2 * Math.PI) / 3, (i * 2 * Math.PI) / 3 + 1.1);
+      ctx.stroke();
+    }
 
     ctx.strokeStyle = COLORS.outline;
     ctx.lineWidth = 3;
