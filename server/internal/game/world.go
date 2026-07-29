@@ -69,9 +69,13 @@ func (w *World) Step() {
 		return
 
 	case PhaseScored:
-		// let the dead ball roll to a stop while the point sinks in
+		// let the dead ball roll to a stop while the point sinks in. it still
+		// has to obey the walls: a point won off a hard shot left it rolling
+		// fast enough to leave the arena and sit off screen for the whole
+		// freeze
 		w.Ball.Pos.X += w.Ball.Velocity.X
 		w.Ball.Velocity.X *= 0.95
+		w.Ball.bounceOffWalls()
 		if w.tickPhaseTimer() {
 			w.beginServe()
 		}
