@@ -13,8 +13,9 @@ const DELAY_TICKS = 6;
 // snapshots older than this are useless, keep the buffer bounded
 const MAX_SNAPSHOTS = 60;
 
-// how aggressively the render clock is pulled back toward its target. a hard
-// snap would be visible as a jump, so the drift is corrected gradually
+// how aggressively the render clock is pulled back toward its target, as a
+// fraction of the remaining drift per tick. a hard snap would be visible as a
+// jump, so the drift is corrected gradually
 const CLOCK_CORRECTION = 0.08;
 
 // past this gap something went badly wrong (tab was backgrounded, connection
@@ -55,8 +56,13 @@ export class SnapshotBuffer {
     if (this.renderTick === null || Math.abs(target - this.renderTick) > RESYNC_THRESHOLD_TICKS) {
       this.renderTick = target;
     } else {
-      this.renderTick += dt * this.tickRate;
-      this.renderTick += (target - this.renderTick) * CLOCK_CORRECTION;
+      const ticks = dt * this.tickRate;
+      this.renderTick += ticks;
+      // compounded over the ticks this frame covered, so the clock closes the
+      // same share of its drift per second whatever the refresh rate. taking
+      // a flat bite once a frame pulled it in more than twice as fast on a
+      // 144hz screen as on a 60hz one
+      this.renderTick += (target - this.renderTick) * (1 - (1 - CLOCK_CORRECTION) ** ticks);
     }
 
     // never extrapolate past what the server has actually told us
