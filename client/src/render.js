@@ -4,6 +4,9 @@
 // radians of fake ball spin per unit of horizontal speed per tick
 const BALL_SPIN_PER_TICK = 0.01;
 
+// css pixels left free around the canvas so its border and shadow have room
+const VIEWPORT_MARGIN = 32;
+
 const COLORS = {
   skyTop: '#4fc3f7',
   skyBottom: '#b3e5fc',
@@ -36,27 +39,31 @@ export class Renderer {
     window.addEventListener('resize', () => this.resize());
   }
 
-  // resize keeps the arena aspect ratio and letterboxes the rest, so both
-  // players see exactly the same playfield whatever their window size is
+  // resize fits the canvas itself to the arena's aspect ratio instead of
+  // filling the window and letterboxing inside. the canvas box is then the
+  // playfield exactly, so the border drawn in css hugs the court and both
+  // players still see the same field whatever their window size is
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
 
-    this.canvas.width = width * dpr;
-    this.canvas.height = height * dpr;
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
+    // a window narrower than the margin must not collapse the canvas to zero
+    const availableWidth = Math.max(window.innerWidth - VIEWPORT_MARGIN, 1);
+    const availableHeight = Math.max(window.innerHeight - VIEWPORT_MARGIN, 1);
 
-    this.scale = Math.min(width / this.arena.width, height / this.arena.height);
-    this.offsetX = (width - this.arena.width * this.scale) / 2;
-    this.offsetY = (height - this.arena.height * this.scale) / 2;
+    const fit = Math.min(availableWidth / this.arena.width, availableHeight / this.arena.height);
+
+    // rounded so the backing buffer lands on whole device pixels, then the
+    // scale is taken back from the rounded size to stay exact
+    this.viewWidth = Math.round(this.arena.width * fit);
+    this.viewHeight = Math.round(this.arena.height * fit);
+    this.scale = this.viewWidth / this.arena.width;
+
+    this.canvas.style.width = `${this.viewWidth}px`;
+    this.canvas.style.height = `${this.viewHeight}px`;
+    this.canvas.width = Math.round(this.viewWidth * dpr);
+    this.canvas.height = Math.round(this.viewHeight * dpr);
+
     this.dpr = dpr;
-
-    // everything drawn below works in css pixels, the dpr lives in the
-    // canvas transform alone
-    this.viewWidth = width;
-    this.viewHeight = height;
   }
 
   draw(world, view) {
@@ -71,7 +78,6 @@ export class Renderer {
     ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
 
     ctx.save();
-    ctx.translate(this.offsetX, this.offsetY);
     ctx.scale(this.scale, this.scale);
 
     this.drawBackground();
@@ -203,16 +209,17 @@ export class Renderer {
 
   drawScore(world) {
     const ctx = this.ctx;
-    const centerX = this.offsetX + (this.arena.width * this.scale) / 2;
-    const y = this.offsetY + 60 * this.scale;
+    const centerX = this.viewWidth / 2;
+    const y = 60 * this.scale;
 
-    text(ctx, `${world.score.left} : ${world.score.right}`, centerX, y, 64, 'center');
+    // scaled with the court, otherwise the text swallows a small window
+    text(ctx, `${world.score.left} : ${world.score.right}`, centerX, y, 64 * this.scale, 'center');
   }
 
   drawBanner(world, view) {
     const ctx = this.ctx;
-    const centerX = this.offsetX + (this.arena.width * this.scale) / 2;
-    const centerY = this.offsetY + (this.arena.height * this.scale) / 2.6;
+    const centerX = this.viewWidth / 2;
+    const centerY = this.viewHeight / 2.6;
 
     let message = null;
     if (world.phase === 'serve') {
@@ -224,20 +231,21 @@ export class Renderer {
       message = view.spectator ? 'МАТЧ ОКОНЧЕН' : won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
     }
 
-    if (message) text(ctx, message, centerX, centerY, 52, 'center');
+    if (message) text(ctx, message, centerX, centerY, 52 * this.scale, 'center');
   }
 
   drawStatus(view) {
     const ctx = this.ctx;
-    const x = this.offsetX + 24;
-    const y = this.offsetY + 40;
+    const x = 24 * this.scale;
+    const y = 40 * this.scale;
+    const size = 28 * this.scale;
 
     if (view.status !== 'connected') {
-      text(ctx, view.status === 'connecting' ? 'подключение…' : 'соединение потеряно', x, y, 28, 'left');
+      text(ctx, view.status === 'connecting' ? 'подключение…' : 'соединение потеряно', x, y, size, 'left');
       return;
     }
     if (view.spectator) {
-      text(ctx, 'наблюдатель: оба места заняты', x, y, 28, 'left');
+      text(ctx, 'наблюдатель: оба места заняты', x, y, size, 'left');
     }
   }
 }

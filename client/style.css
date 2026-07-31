@@ -31,4 +31,8 @@ canvas {
   box-shadow: var(--canvas-shadow);
   background-color: #000;
   display: block;
+  /* the renderer sizes the backing buffer from this box, so the border has to
+     sit outside it. under the inherited border-box the picture would be
+     squeezed into a box 4px smaller than the buffer and go blurry */
+  box-sizing: content-box;
 }
