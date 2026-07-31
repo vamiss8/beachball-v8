@@ -1,4 +1,4 @@
-// command server runs the beachball game server: it simulates the match,
+// Command server runs the beachball game server: it simulates the match,
 // serves the built web client and bridges the two over websockets.
 package main
 

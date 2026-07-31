@@ -1,5 +1,7 @@
-// that's a test world not for game developing purposes, it does not deal with the project itself
 package game
+
+// these tests drive World directly and never touch the network layer, which
+// is the whole reason game has no imports from room or protocol.
 
 import "testing"
 

@@ -1,4 +1,4 @@
-// package room owns the live match: it runs the simulation loop and fans the
+// Package room owns the live match: it runs the simulation loop and fans the
 // resulting snapshots out to every connected client.
 package room
 

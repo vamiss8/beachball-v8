@@ -2,7 +2,7 @@ package game
 
 import "math"
 
-// player is one paddle-ish character. fields tagged "-" are simulation
+// Player is one paddle-ish character. fields tagged "-" are simulation
 // internals the client has no business knowing about.
 type Player struct {
 	ID   string `json:"id"`
@@ -102,7 +102,7 @@ func (p *Player) stepHorizontal() {
 	p.clampToOwnHalf()
 }
 
-// clampToOwnHalf keeps a player inside the arena and on their side of the net
+// clampToOwnHalf keeps a player inside the arena and on their side of the net.
 func (p *Player) clampToOwnHalf() {
 	minX, maxX := 0.0, ArenaWidth-PlayerWidth
 	if p.Side == SideLeft {
