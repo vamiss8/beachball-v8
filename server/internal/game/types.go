@@ -30,11 +30,11 @@ const (
 
 // Input is the raw key state sent by a client every tick. the server never
 // trusts anything else from the client, so this is the whole attack surface.
+// dashing is not a key of its own: the server watches for a walk key pressed
+// twice in quick succession, so the client never decides when a dash happens.
 type Input struct {
 	Left  bool `json:"left"`
 	Right bool `json:"right"`
 	Jump  bool `json:"jump"`
 	Block bool `json:"block"`
-	DashL bool `json:"dashL"`
-	DashR bool `json:"dashR"`
 }

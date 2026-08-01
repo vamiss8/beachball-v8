@@ -3,13 +3,25 @@ package game
 // these tests drive World directly and never touch the network layer, which
 // is the whole reason game has no imports from room or protocol.
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // stepN advances the world and returns after n ticks.
 func stepN(w *World, n int) {
 	for i := 0; i < n; i++ {
 		w.Step()
 	}
+}
+
+// tapAgain releases every key for a tick and presses in again, which is the
+// second half of a double tap. the world is stepped twice.
+func tapAgain(w *World, p *Player, in Input) {
+	p.SetInput(Input{})
+	w.Step()
+	p.SetInput(in)
+	w.Step()
 }
 
 func TestServeHoldKeepsBallStill(t *testing.T) {
@@ -96,7 +108,8 @@ func TestMatchFinishesAtPointsToWin(t *testing.T) {
 func TestPlayerCannotCrossTheNet(t *testing.T) {
 	w := NewWorld()
 	p := w.AddPlayer("p1", SideLeft)
-	p.SetInput(Input{Right: true, DashR: true})
+	p.SetInput(Input{Right: true})
+	tapAgain(w, p, Input{Right: true}) // dash straight at the net
 
 	stepN(w, 120)
 
@@ -147,5 +160,92 @@ func TestPlayerLandsAndRegainsAbilities(t *testing.T) {
 	}
 	if p.dashesLeft != DashesPerAirtime {
 		t.Fatalf("dashes after landing = %d, want %d", p.dashesLeft, DashesPerAirtime)
+	}
+}
+
+func TestDoubleTapDashes(t *testing.T) {
+	w := NewWorld()
+	p := w.AddPlayer("p1", SideLeft)
+
+	// the first press is an ordinary walk, nothing more
+	p.SetInput(Input{Right: true})
+	w.Step()
+	if p.VelocityX > MoveSpeed {
+		t.Fatalf("a single press already dashed: velocityX = %v", p.VelocityX)
+	}
+
+	tapAgain(w, p, Input{Right: true})
+
+	if p.VelocityX <= MoveSpeed {
+		t.Fatalf("double tap did not dash: velocityX = %v, want > %v", p.VelocityX, MoveSpeed)
+	}
+	// landing refills the dash count every tick, so the cooldown is what
+	// actually proves a dash was spent while standing on the sand
+	if p.dashCooldown == 0 {
+		t.Fatal("dash cooldown was not armed")
+	}
+}
+
+func TestSecondTapAfterTheWindowDoesNotDash(t *testing.T) {
+	w := NewWorld()
+	p := w.AddPlayer("p1", SideLeft)
+
+	p.SetInput(Input{Right: true})
+	w.Step()
+	p.SetInput(Input{})
+	stepN(w, DoubleTapWindowTicks+1) // let the pairing expire
+
+	p.SetInput(Input{Right: true})
+	w.Step()
+
+	if p.VelocityX > MoveSpeed {
+		t.Fatalf("a late second tap dashed: velocityX = %v", p.VelocityX)
+	}
+	if p.dashCooldown != 0 {
+		t.Fatalf("dash cooldown = %d, want 0: no dash should have fired", p.dashCooldown)
+	}
+}
+
+func TestRunningPlayerCarriesTheBall(t *testing.T) {
+	w := NewWorld()
+	p := w.AddPlayer("p1", SideLeft)
+	stepN(w, ServeHoldTicks) // into open play
+
+	// park the ball just above the player's head, barely falling
+	p.Pos.X = SpawnOffsetX
+	w.Ball.Pos = Vec2{X: p.Pos.X + PlayerWidth/2, Y: p.Pos.Y - BallRadius - 1}
+	w.Ball.Velocity = Vec2{X: 0, Y: 1}
+
+	p.SetInput(Input{Right: true})
+	stepN(w, 30)
+
+	// the ball should have travelled with the player instead of being
+	// knocked out in front of them or left behind
+	drift := math.Abs(w.Ball.Pos.X - (p.Pos.X + PlayerWidth/2))
+	if drift > PlayerWidth {
+		t.Fatalf("ball drifted %v from the player, want <= %v", drift, PlayerWidth)
+	}
+	if w.Phase != PhasePlaying {
+		t.Fatalf("phase = %q, want %q: the carried ball should not have landed", w.Phase, PhasePlaying)
+	}
+}
+
+func TestCarryingCountsAsOneHit(t *testing.T) {
+	w := NewWorld()
+	p := w.AddPlayer("p1", SideLeft)
+	stepN(w, ServeHoldTicks)
+
+	p.Pos.X = SpawnOffsetX
+	w.Ball.Pos = Vec2{X: p.Pos.X + PlayerWidth/2, Y: p.Pos.Y - BallRadius - 1}
+	w.Ball.Velocity = Vec2{X: 0, Y: 1}
+	p.SetInput(Input{Right: true})
+
+	stepN(w, 120) // two seconds of carrying
+
+	// counting every touching tick instead of every arrival used to rack up
+	// over a hundred hits here, which pinned ball gravity at its cap and
+	// left the rest of the rally unplayable
+	if w.Ball.HitCount > 10 {
+		t.Fatalf("hit count = %d after carrying, want a handful", w.Ball.HitCount)
 	}
 }

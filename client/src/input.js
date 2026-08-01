@@ -12,19 +12,17 @@ const BINDINGS = {
   Space: 'jump',
   KeyS: 'block',
   ArrowDown: 'block',
-  KeyQ: 'dashL',
-  KeyE: 'dashR',
 };
 
 export class Input {
   constructor() {
+    // dashing has no key of its own: the server spots a walk key tapped
+    // twice, so nothing here has to know that dashes exist
     this.keys = {
       left: false,
       right: false,
       jump: false,
       block: false,
-      dashL: false,
-      dashR: false,
     };
 
     window.addEventListener('keydown', (e) => this.handle(e, true));

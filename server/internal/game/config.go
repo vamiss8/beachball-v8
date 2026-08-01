@@ -47,6 +47,11 @@ const (
 	DashCooldownTicks = 30
 	DashesPerAirtime  = 2
 
+	// how fast a walk key has to be pressed twice to dash. a fifth of a
+	// second is quick enough that ordinary walking never trips it, and slow
+	// enough to hit reliably
+	DoubleTapWindowTicks = 12
+
 	// spin applied by dashes and double jumps; a spinning player smashes
 	DashSpin       = 0.35
 	DoubleJumpSpin = 0.25
@@ -81,6 +86,13 @@ const (
 	// how much of the player's own motion is handed to the ball for aiming
 	AimTransferX = 0.25
 	AimTransferY = 0.15
+
+	// a contact at least this square on top of the head counts as carrying
+	// rather than hitting: 1.0 is straight down, 0 is a graze off the side
+	CarryTopness = 0.85
+	// carrying pulls the ball toward the player's own speed instead of just
+	// nudging it, so a running player keeps it overhead
+	CarryTransfer = 0.8
 )
 
 // match rules
