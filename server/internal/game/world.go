@@ -147,13 +147,23 @@ func (w *World) resolvePlayerHits() {
 		w.Ball.Velocity.X += impulse * nx
 		w.Ball.Velocity.Y += impulse * ny
 
-		// a small slice of the player's own motion, so movement aims the shot
-		w.Ball.Velocity.X += p.VelocityX * AimTransferX
+		// a contact square on the head is a carry rather than a hit: the ball
+		// is pulled toward the player's own speed, so running under it keeps
+		// it overhead instead of knocking it out in front. blocks and smashes
+		// are deliberate shots and never carry
+		if topness := -ny; topness >= CarryTopness && !p.IsBlocking && !p.isSmashing() {
+			w.Ball.Velocity.X += (p.VelocityX - w.Ball.Velocity.X) * CarryTransfer
+		} else {
+			// a small slice of the player's own motion, so movement aims the shot
+			w.Ball.Velocity.X += p.VelocityX * AimTransferX
+		}
 		if p.VelocityY < 0 {
 			w.Ball.Velocity.Y += p.VelocityY * AimTransferY
 		}
 
-		w.Ball.HitCount++
+		if newContact {
+			w.Ball.HitCount++
+		}
 	}
 }
 
