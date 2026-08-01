@@ -47,6 +47,11 @@ const (
 	DashCooldownTicks = 30
 	DashesPerAirtime  = 2
 
+	// how fast a walk key has to be pressed twice to dash. a fifth of a
+	// second is quick enough that ordinary walking never trips it, and slow
+	// enough to hit reliably
+	DoubleTapWindowTicks = 12
+
 	// spin applied by dashes and double jumps; a spinning player smashes
 	DashSpin       = 0.35
 	DoubleJumpSpin = 0.25
