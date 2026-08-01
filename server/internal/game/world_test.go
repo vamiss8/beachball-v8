@@ -12,6 +12,15 @@ func stepN(w *World, n int) {
 	}
 }
 
+// tapAgain releases every key for a tick and presses in again, which is the
+// second half of a double tap. the world is stepped twice.
+func tapAgain(w *World, p *Player, in Input) {
+	p.SetInput(Input{})
+	w.Step()
+	p.SetInput(in)
+	w.Step()
+}
+
 func TestServeHoldKeepsBallStill(t *testing.T) {
 	w := NewWorld()
 	start := w.Ball.Pos
@@ -96,7 +105,8 @@ func TestMatchFinishesAtPointsToWin(t *testing.T) {
 func TestPlayerCannotCrossTheNet(t *testing.T) {
 	w := NewWorld()
 	p := w.AddPlayer("p1", SideLeft)
-	p.SetInput(Input{Right: true, DashR: true})
+	p.SetInput(Input{Right: true})
+	tapAgain(w, p, Input{Right: true}) // dash straight at the net
 
 	stepN(w, 120)
 

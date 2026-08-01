@@ -22,6 +22,17 @@ type Player struct {
 	dashesLeft    int
 	dashCooldown  int
 	prevJump      bool // edge detection, jump must be re-pressed every time
+	prevLeft      bool
+	prevRight     bool
+
+	// ticks since a walk key was last tapped, negative when no tap is
+	// waiting for its partner
+	tapLeft  int
+	tapRight int
+
+	// whether the ball was already resting against this player last tick,
+	// so one long contact counts as a single hit
+	touchingBall bool
 
 	input Input
 }
@@ -53,6 +64,9 @@ func (p *Player) Reset() {
 	p.canDoubleJump = true
 	p.dashesLeft = DashesPerAirtime
 	p.dashCooldown = 0
+	p.tapLeft = -1
+	p.tapRight = -1
+	p.touchingBall = false
 }
 
 // groundLevel is the y where a player's top edge rests on the sand.
@@ -70,22 +84,7 @@ func (p *Player) stepHorizontal() {
 		p.dashCooldown--
 	}
 
-	// a dash is an instant impulse that decays, so it stacks on top of the
-	// walk speed instead of replacing it
-	if p.dashesLeft > 0 && p.dashCooldown <= 0 {
-		switch {
-		case p.input.DashL:
-			p.dashVelocity = -DashVelocity
-			p.rotationVel = -DashSpin
-			p.dashesLeft--
-			p.dashCooldown = DashCooldownTicks
-		case p.input.DashR:
-			p.dashVelocity = DashVelocity
-			p.rotationVel = DashSpin
-			p.dashesLeft--
-			p.dashCooldown = DashCooldownTicks
-		}
-	}
+	p.dashOnDoubleTap()
 
 	walk := 0.0
 	if p.input.Left {
@@ -100,6 +99,65 @@ func (p *Player) stepHorizontal() {
 	p.dashVelocity *= DashFriction
 
 	p.clampToOwnHalf()
+}
+
+// dashOnDoubleTap fires a dash when a walk key is tapped twice inside the
+// window. the detection sits here rather than in the client because the
+// client only ever reports which keys are down, never what that means.
+func (p *Player) dashOnDoubleTap() {
+	pressedLeft := p.input.Left && !p.prevLeft
+	pressedRight := p.input.Right && !p.prevRight
+	p.prevLeft, p.prevRight = p.input.Left, p.input.Right
+
+	// age the pending taps before this tick's presses, so a press lands on
+	// zero and the window counts from the tick after it
+	p.tapLeft = agePendingTap(p.tapLeft)
+	p.tapRight = agePendingTap(p.tapRight)
+
+	if pressedLeft {
+		if p.tapLeft >= 0 {
+			p.startDash(-1)
+			// the pair is spent, otherwise holding a rhythm keeps dashing
+			p.tapLeft = -1
+		} else {
+			p.tapLeft = 0
+		}
+	}
+
+	if pressedRight {
+		if p.tapRight >= 0 {
+			p.startDash(1)
+			p.tapRight = -1
+		} else {
+			p.tapRight = 0
+		}
+	}
+}
+
+// agePendingTap advances a waiting tap by one tick and forgets it once the
+// window has passed. negative means nothing is waiting.
+func agePendingTap(age int) int {
+	if age < 0 {
+		return -1
+	}
+	if age++; age > DoubleTapWindowTicks {
+		return -1
+	}
+	return age
+}
+
+// startDash sends the player flying in dir (-1 left, 1 right) if they still
+// have a dash left and the cooldown has expired. a dash is an instant impulse
+// that decays, so it stacks on top of the walk speed instead of replacing it.
+func (p *Player) startDash(dir float64) {
+	if p.dashesLeft <= 0 || p.dashCooldown > 0 {
+		return
+	}
+
+	p.dashVelocity = dir * DashVelocity
+	p.rotationVel = dir * DashSpin
+	p.dashesLeft--
+	p.dashCooldown = DashCooldownTicks
 }
 
 // clampToOwnHalf keeps a player inside the arena and on their side of the net.
