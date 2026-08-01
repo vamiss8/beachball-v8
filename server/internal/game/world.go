@@ -110,8 +110,15 @@ func (w *World) resolvePlayerHits() {
 		dy := w.Ball.Pos.Y - closest.Y
 		distSq := dx*dx + dy*dy
 		if distSq >= w.Ball.Radius*w.Ball.Radius {
+			p.touchingBall = false
 			continue
 		}
+
+		// a hit is the moment the ball arrives, not every tick it stays.
+		// a carried ball touches the head on almost every tick, which used
+		// to ramp the ball's gravity to its cap within a second
+		newContact := !p.touchingBall
+		p.touchingBall = true
 
 		dist := math.Sqrt(distSq)
 		if dist == 0 {
