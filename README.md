@@ -120,10 +120,11 @@ go test ./...
 | `A` / `D` | move |
 | `W` | jump, press again for a double jump with spin |
 | `S` in the air | block: kills the ball and drops you down |
-| `Q` / `E` | dash left/right, two per airtime |
+| `A` `A` / `D` `D` | tap twice to dash that way, two per airtime |
 
-A spinning player smashes, a blocking one kills the ball. The ball's gravity
-grows with every touch, so rallies can't go on forever.
+A spinning player smashes, a blocking one kills the ball. Catch it square on
+your head while running and you carry it along instead of knocking it away.
+The ball's gravity grows with every touch, so rallies can't go on forever.
 
 ## Rules
 
@@ -258,9 +259,10 @@ go test ./...
 | `A` / `D` | движение |
 | `W` | прыжок, второй раз — двойной, с вращением |
 | `S` в воздухе | блок: гасит мяч и роняет тебя вниз |
-| `Q` / `E` | рывок влево/вправо, два за один полёт |
+| `A` `A` / `D` `D` | двойное нажатие — рывок в ту же сторону, два за полёт |
 
-Крутящийся игрок бьёт смэш, блокирующий — гасит. Гравитация мяча растёт с
+Крутящийся игрок бьёт смэш, блокирующий — гасит. Поймал мяч ровно на голову на
+бегу — ведёшь его с собой, а не выбиваешь вперёд. Гравитация мяча растёт с
 каждым касанием, так что бесконечных розыгрышей не бывает.
 
 ## Правила
