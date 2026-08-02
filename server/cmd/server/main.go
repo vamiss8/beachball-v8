@@ -25,12 +25,11 @@ func main() {
 	dev := flag.String("dev-origin", "http://localhost:5173", "extra origin allowed to connect, for the vite dev server")
 	flag.Parse()
 
-	// one room for now; matchmaking by room code comes next
-	lobby := room.New("default")
-	defer lobby.Close()
+	rooms := room.NewManager()
+	defer rooms.CloseAll()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", wsHandler(lobby, *dev))
+	mux.HandleFunc("/ws", wsHandler(rooms, *dev))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
@@ -63,8 +62,9 @@ func main() {
 	}
 }
 
-// wsHandler upgrades a request and hands the connection to the room.
-func wsHandler(r *room.Room, devOrigin string) http.HandlerFunc {
+// wsHandler upgrades a request and hands the connection to the room named in
+// the query string. no code means "open me a fresh room".
+func wsHandler(rooms *room.Manager, devOrigin string) http.HandlerFunc {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -72,6 +72,19 @@ func wsHandler(r *room.Room, devOrigin string) http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, req *http.Request) {
+		// resolved before the upgrade, so a bad code gets a plain http error
+		// the browser can actually show instead of an instant socket close
+		rm, err := rooms.Join(req.URL.Query().Get("room"))
+		if err != nil {
+			status := http.StatusServiceUnavailable
+			if errors.Is(err, room.ErrBadCode) {
+				status = http.StatusBadRequest
+			}
+			log.Printf("join failed for %s: %v", req.RemoteAddr, err)
+			http.Error(w, err.Error(), status)
+			return
+		}
+
 		conn, err := upgrader.Upgrade(w, req, nil)
 		if err != nil {
 			// upgrade failures are per-request problems, never fatal:
@@ -79,7 +92,7 @@ func wsHandler(r *room.Room, devOrigin string) http.HandlerFunc {
 			log.Printf("upgrade failed for %s: %v", req.RemoteAddr, err)
 			return
 		}
-		r.Serve(conn)
+		rm.Serve(conn)
 	}
 }
 
