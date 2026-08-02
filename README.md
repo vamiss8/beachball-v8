@@ -51,6 +51,8 @@ server/
     ├── protocol/        every websocket message in one file
     └── room/            the match: simulation loop and snapshot broadcast
         ├── room.go      owns the state, talks to the outside only via channels
+        ├── manager.go   the registry of live rooms, keyed by code
+        ├── code.go      readable room codes
         └── client.go    one connection: readPump / writePump
 ```
 
@@ -58,7 +60,9 @@ server/
 split: the physics runs in ordinary unit tests, no sockets involved.
 
 A room's state is touched only by its own goroutine, everything else talks to it
-through channels. There are no mutexes on the game state.
+through channels. There are no mutexes on the game state. The manager is the one
+exception — the map of rooms is not game state, so a plain mutex around it is
+fine.
 
 ## Running it
 
@@ -126,6 +130,19 @@ A spinning player smashes, a blocking one kills the ball. Catch it square on
 your head while running and you carry it along instead of knocking it away.
 The ball's gravity grows with every touch, so rallies can't go on forever.
 
+## Rooms
+
+Opening the site without a link puts you in a fresh room and writes its code
+into the address bar, so the page you are already looking at *is* the invite.
+Send it to someone and they land in your match; a third visitor watches.
+
+Codes are four characters from an alphabet with no `0`/`O` or `1`/`I`/`L`, so
+reading one out loud is unambiguous. A code that never existed still opens a
+room under that name, which means a shared link survives a server restart.
+
+A room closes itself a minute after the last person leaves, so a reload or a
+short wait for your opponent costs nothing.
+
 ## Rules
 
 Before a serve the ball hangs in the air for a second so both players can get
@@ -136,8 +153,8 @@ winner serves. First to 15.
 
 - [x] Server-side simulation, split into packages
 - [x] Tests for the physics and the match rules
-- [ ] Client: connect to the socket, render, interpolate
-- [ ] Rooms by code and an invite link
+- [x] Client: connect to the socket, render, interpolate
+- [x] Rooms by code and an invite link
 - [ ] Lobby, nicknames, ready checks
 - [ ] Sprites, sound, hit effects
 - [ ] 2v2 mode
@@ -265,6 +282,21 @@ go test ./...
 бегу — ведёшь его с собой, а не выбиваешь вперёд. Гравитация мяча растёт с
 каждым касанием, так что бесконечных розыгрышей не бывает.
 
+## Комнаты
+
+Открыл сайт без ссылки — попал в свежую комнату, а её код тут же прописался в
+адресной строке. То есть страница, на которую ты смотришь, и есть приглашение:
+кинул ссылку — человек оказался в твоём матче. Третий зашедший смотрит со
+стороны.
+
+Код — четыре символа из алфавита без `0`/`O` и `1`/`I`/`L`, чтобы его можно было
+продиктовать вслух и не переспрашивать. Код, которого никогда не существовало,
+всё равно открывает комнату с этим именем — так ссылка переживает перезапуск
+сервера.
+
+Комната закрывается через минуту после ухода последнего игрока, так что
+перезагрузка страницы или ожидание соперника ничего не стоят.
+
 ## Правила
 
 Перед подачей мяч висит в воздухе секунду, чтобы оба успели встать. Упал на
@@ -274,8 +306,8 @@ go test ./...
 
 - [x] Симуляция на сервере, разбитая на пакеты
 - [x] Тесты физики и правил
-- [ ] Клиент: подключение к сокету, отрисовка, интерполяция
-- [ ] Комнаты по коду и ссылка-приглашение
+- [x] Клиент: подключение к сокету, отрисовка, интерполяция
+- [x] Комнаты по коду и ссылка-приглашение
 - [ ] Лобби, никнеймы, готовность
 - [ ] Спрайты, звук, эффекты ударов
 - [ ] Режим 2 на 2

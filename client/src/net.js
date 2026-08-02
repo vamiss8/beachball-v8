@@ -3,11 +3,19 @@
 
 const RECONNECT_DELAY_MS = 1000;
 
+// the room code lives in the query string, which makes the address bar the
+// invite link. no code asks the server to open a fresh room and tell us which
+export function roomCodeFromURL() {
+  return new URLSearchParams(location.search).get('room') ?? '';
+}
+
 // derives the socket url from the page url, so the same build works both
 // behind the vite dev proxy and when the go server serves the bundle itself
 function socketURL() {
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${scheme}://${location.host}/ws`;
+  const code = roomCodeFromURL();
+  const query = code ? `?room=${encodeURIComponent(code)}` : '';
+  return `${scheme}://${location.host}/ws${query}`;
 }
 
 export class Connection {
