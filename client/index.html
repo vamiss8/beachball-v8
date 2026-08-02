@@ -8,6 +8,14 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+
+  <!-- hidden until the server names the room we ended up in -->
+  <div id="room-bar" hidden>
+    <span class="room-bar__label">room</span>
+    <strong class="room-bar__code" data-room-code></strong>
+    <button class="room-bar__button" type="button" data-copy-link>copy invite link</button>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
