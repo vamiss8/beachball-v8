@@ -223,12 +223,13 @@ export class Renderer {
 
     let message = null;
     if (world.phase === 'serve') {
-      message = `${world.serveSide === 'left' ? 'ЗЕЛЁНЫЕ' : 'СИНИЕ'} ПОДАЮТ`;
+      // named by colour rather than side, since that is what the player sees
+      message = `${world.serveSide === 'left' ? 'GREEN' : 'BLUE'} SERVES`;
     } else if (world.phase === 'scored') {
-      message = 'ОЧКО';
+      message = 'POINT';
     } else if (world.phase === 'finished') {
       const won = world.winner === view.side;
-      message = view.spectator ? 'МАТЧ ОКОНЧЕН' : won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
+      message = view.spectator ? 'MATCH OVER' : won ? 'YOU WIN' : 'YOU LOSE';
     }
 
     if (message) text(ctx, message, centerX, centerY, 52 * this.scale, 'center');
@@ -241,11 +242,11 @@ export class Renderer {
     const size = 28 * this.scale;
 
     if (view.status !== 'connected') {
-      text(ctx, view.status === 'connecting' ? 'подключение…' : 'соединение потеряно', x, y, size, 'left');
+      text(ctx, view.status === 'connecting' ? 'connecting…' : 'connection lost', x, y, size, 'left');
       return;
     }
     if (view.spectator) {
-      text(ctx, 'наблюдатель: оба места заняты', x, y, size, 'left');
+      text(ctx, 'spectating: both sides are taken', x, y, size, 'left');
     }
   }
 }
