@@ -5,6 +5,7 @@ package room
 import (
 	"log"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,11 @@ import (
 
 // MaxPlayers is how many people can actually play; everyone else spectates.
 const MaxPlayers = 2
+
+// EmptyRoomTTL is how long a room waits alone before closing. the grace
+// period is what lets someone reload the page, or arrive a moment before
+// their opponent, without the match evaporating.
+const EmptyRoomTTL = 60 * time.Second
 
 // playerInput carries a client's key state into the room goroutine.
 type playerInput struct {
@@ -36,10 +42,19 @@ type Room struct {
 	quit       chan struct{}
 
 	nextPlayerID atomic.Uint64
+
+	// when the last client left, zero while anyone is still here
+	emptySince time.Time
+	// told the room's own id once it closes itself, so the manager can drop
+	// it from the registry
+	onEmpty func(string)
+
+	closeOnce sync.Once
 }
 
-// New creates a room and starts its simulation loop.
-func New(id string) *Room {
+// newRoom creates a room and starts its simulation loop. onEmpty may be nil,
+// which is what tests that own a single room directly want.
+func newRoom(id string, onEmpty func(string)) *Room {
 	r := &Room{
 		ID:         id,
 		world:      game.NewWorld(),
@@ -48,13 +63,17 @@ func New(id string) *Room {
 		unregister: make(chan *Client, MaxPlayers),
 		inputs:     make(chan playerInput, 64),
 		quit:       make(chan struct{}),
+		onEmpty:    onEmpty,
 	}
 	go r.run()
 	return r
 }
 
-// Close stops the simulation loop.
-func (r *Room) Close() { close(r.quit) }
+// Close stops the simulation loop. safe to call more than once, since a room
+// can also close itself once it has sat empty.
+func (r *Room) Close() {
+	r.closeOnce.Do(func() { close(r.quit) })
+}
 
 // run is the single owner of the room's state.
 func (r *Room) run() {
@@ -78,10 +97,41 @@ func (r *Room) run() {
 			}
 
 		case <-ticker.C:
+			// an empty room has nobody to simulate for, so it idles instead
+			// of burning a tick sixty times a second until it expires
+			if len(r.clients) == 0 {
+				if r.idleTooLong() {
+					r.shutdown()
+					return
+				}
+				continue
+			}
+			r.emptySince = time.Time{}
+
 			r.world.Step()
 			r.broadcastState()
 		}
 	}
+}
+
+// idleTooLong reports whether the room has been empty past its grace period.
+func (r *Room) idleTooLong() bool {
+	if r.emptySince.IsZero() {
+		r.emptySince = time.Now()
+		return false
+	}
+	return time.Since(r.emptySince) >= EmptyRoomTTL
+}
+
+// shutdown retires the room. the registry is told first so that nobody is
+// handed a room that is already on its way out, and quit is closed second so
+// a connection caught mid-join is released instead of blocking forever.
+func (r *Room) shutdown() {
+	if r.onEmpty != nil {
+		r.onEmpty(r.ID)
+	}
+	r.Close()
+	log.Printf("room %s: closed after %s empty", r.ID, EmptyRoomTTL)
 }
 
 // add seats a new client, as a player if a side is free and as a spectator
