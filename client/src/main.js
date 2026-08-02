@@ -5,9 +5,11 @@ import { Connection } from './net.js';
 import { Input } from './input.js';
 import { SnapshotBuffer } from './interpolate.js';
 import { Renderer } from './render.js';
+import { RoomBar } from './ui.js';
 
 const canvas = document.getElementById('game');
 const input = new Input();
+const roomBar = new RoomBar(document.getElementById('room-bar'));
 
 // everything the renderer needs that is not part of the world snapshot
 const view = {
