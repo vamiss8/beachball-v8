@@ -13,7 +13,6 @@ const (
 	// from server to client
 	TypeWelcome = "welcome"
 	TypeState   = "state"
-	TypeError   = "error"
 
 	// from client to server
 	TypeInput = "input"
@@ -73,11 +72,6 @@ type Welcome struct {
 // State is a full snapshot of the world, sent every broadcast tick.
 type State struct {
 	World *game.World `json:"world"`
-}
-
-// Error reports something the client did wrong, without dropping it.
-type Error struct {
-	Message string `json:"message"`
 }
 
 // Input is the only message a client is allowed to send.
