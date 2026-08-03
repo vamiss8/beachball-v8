@@ -9,6 +9,9 @@ server/server.exe
 # environment
 .env
 
+# local agent notes, not part of the project
+CLAUDE.md
+
 # os files
 .DS_Store
 Thumbs.db
