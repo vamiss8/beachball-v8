@@ -34,7 +34,10 @@ straight from the console. So I rewrote it in Go. The volleyball here is
 arcade-y: the entire physics is gravity plus circle-versus-rectangle collision,
 and a full engine is overkill for that. There's no decent p2 port for Go anyway.
 
-The price is input lag. I plan to hide it with interpolation on the client.
+The price is input lag. The client hides part of it by rendering a fraction of
+a second in the past and interpolating between snapshots, so movement is smooth
+even when packets arrive unevenly. Your own player still waits for the server,
+which is the next thing to fix.
 
 ## Server packages
 
@@ -190,7 +193,10 @@ winner serves. First to 15.
 это гравитация и столкновение круга с прямоугольником, полноценный движок для
 такого избыточен. Плюс нормального порта p2 под Go всё равно нет.
 
-Платим за это задержкой ввода. Собираюсь гасить её интерполяцией на клиенте.
+Платим за это задержкой ввода. Часть её клиент прячет: рисует на доли секунды в
+прошлом и интерполирует между снапшотами, поэтому движение плавное даже когда
+пакеты приходят неровно. Свой игрок всё ещё ждёт сервер — это следующее, что
+нужно чинить.
 
 ## Пакеты сервера
 
