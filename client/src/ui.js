@@ -19,6 +19,9 @@ export class RoomBar {
   show(code) {
     this.codeEl.textContent = code;
     this.root.hidden = false;
+    // in the tab title too, so two rooms open side by side can be told apart
+    // without switching between them
+    document.title = `beachball · ${code}`;
     rememberRoom(code);
   }
 
