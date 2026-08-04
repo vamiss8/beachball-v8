@@ -1,7 +1,12 @@
 // websocket transport. owns the connection and hands incoming snapshots to
 // whoever subscribed; knows nothing about rendering or game rules.
 
-const RECONNECT_DELAY_MS = 1000;
+// the first retry is quick, so a momentary blip is invisible, and each
+// further one backs off. a server that is genuinely down, or a link with a
+// room code the server rejects, would otherwise be hammered once a second
+// for as long as the tab stays open
+const RECONNECT_DELAY_MS = 500;
+const RECONNECT_MAX_DELAY_MS = 10000;
 
 // the room code lives in the query string, which makes the address bar the
 // invite link. no code asks the server to open a fresh room and tell us which
@@ -26,6 +31,7 @@ export class Connection {
 
     this.socket = null;
     this.reconnectTimer = null;
+    this.reconnectDelay = RECONNECT_DELAY_MS;
     this.lastSentKeys = null;
   }
 
@@ -37,6 +43,7 @@ export class Connection {
 
     socket.addEventListener('open', () => {
       this.onStatus('connected');
+      this.reconnectDelay = RECONNECT_DELAY_MS;
       // the server keeps the last input it received, so a fresh connection
       // must resend the current key state instead of waiting for a change
       this.lastSentKeys = null;
@@ -55,10 +62,14 @@ export class Connection {
 
   scheduleReconnect() {
     if (this.reconnectTimer !== null) return;
+
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(delay * 2, RECONNECT_MAX_DELAY_MS);
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
-    }, RECONNECT_DELAY_MS);
+    }, delay);
   }
 
   handleMessage(raw) {
