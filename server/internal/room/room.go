@@ -6,7 +6,6 @@ import (
 	"log"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"beachball-v8/server/internal/game"
@@ -41,7 +40,7 @@ type Room struct {
 	inputs     chan playerInput
 	quit       chan struct{}
 
-	nextPlayerID atomic.Uint64
+	nextPlayerID uint64
 
 	// when the last client left, zero while anyone is still here
 	emptySince time.Time
@@ -190,7 +189,8 @@ func (r *Room) freeSide() (game.Side, bool) {
 }
 
 func (r *Room) newPlayerID() string {
-	return "player_" + strconv.FormatUint(r.nextPlayerID.Add(1), 10)
+	r.nextPlayerID++
+	return "player_" + strconv.FormatUint(r.nextPlayerID, 10)
 }
 
 // broadcastState marshals the world once and hands the same bytes to everyone.
