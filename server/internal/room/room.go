@@ -26,6 +26,13 @@ type playerInput struct {
 	keys     game.Input
 }
 
+// lobbyUpdate carries a name and readiness change into the room goroutine.
+type lobbyUpdate struct {
+	playerID string
+	name     string
+	ready    bool
+}
+
 // Room is a single match. every field below is touched only by run(), so the
 // simulation needs no locks at all; the outside world talks to it exclusively
 // through channels.
@@ -38,6 +45,7 @@ type Room struct {
 	register   chan *Client
 	unregister chan *Client
 	inputs     chan playerInput
+	lobby      chan lobbyUpdate
 	quit       chan struct{}
 
 	nextPlayerID uint64
@@ -61,6 +69,7 @@ func newRoom(id string, onEmpty func(string)) *Room {
 		register:   make(chan *Client),
 		unregister: make(chan *Client, MaxPlayers),
 		inputs:     make(chan playerInput, 64),
+		lobby:      make(chan lobbyUpdate, 8),
 		quit:       make(chan struct{}),
 		onEmpty:    onEmpty,
 	}
@@ -93,6 +102,12 @@ func (r *Room) run() {
 		case in := <-r.inputs:
 			if p, ok := r.world.Players[in.playerID]; ok {
 				p.SetInput(in.keys)
+			}
+
+		case up := <-r.lobby:
+			if p, ok := r.world.Players[up.playerID]; ok {
+				p.SetName(up.name)
+				p.SetReady(up.ready)
 			}
 
 		case <-ticker.C:

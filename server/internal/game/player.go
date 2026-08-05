@@ -8,6 +8,12 @@ type Player struct {
 	ID   string `json:"id"`
 	Side Side   `json:"side"`
 
+	// chosen in the lobby. left empty when the player never picked one, and
+	// the client falls back to naming them by their colour
+	Name string `json:"name"`
+	// whether this player has said they are ready to start
+	Ready bool `json:"ready"`
+
 	Pos       Vec2    `json:"pos"`
 	VelocityX float64 `json:"velocityX"`
 	VelocityY float64 `json:"velocityY"`
@@ -46,6 +52,12 @@ func NewPlayer(id string, side Side) *Player {
 
 // SetInput replaces the player's key state. called from the network layer.
 func (p *Player) SetInput(in Input) { p.input = in }
+
+// SetName stores a name the client asked for, cleaned up first.
+func (p *Player) SetName(raw string) { p.Name = SanitizeName(raw) }
+
+// SetReady records whether the player wants the match to start.
+func (p *Player) SetReady(ready bool) { p.Ready = ready }
 
 // Reset puts the player back at its spawn point for a new rally.
 func (p *Player) Reset() {

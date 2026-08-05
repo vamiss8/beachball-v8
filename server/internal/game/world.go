@@ -22,14 +22,17 @@ type World struct {
 	phaseTimer int
 }
 
-// NewWorld builds an empty match ready for its first serve.
+// NewWorld builds an empty world sitting in the lobby, waiting for players.
 func NewWorld() *World {
 	w := &World{
 		Players:   make(map[string]*Player),
 		Score:     map[Side]int{SideLeft: 0, SideRight: 0},
 		ServeSide: SideLeft,
+		Phase:     PhaseLobby,
 	}
-	w.beginServe()
+	// the ball is parked where a serve would start, so the lobby still shows
+	// a sensible court instead of a ball sitting at the origin
+	w.parkBall()
 	return w
 }
 
@@ -41,8 +44,16 @@ func (w *World) AddPlayer(id string, side Side) *Player {
 	return p
 }
 
-// RemovePlayer drops a player from the simulation.
-func (w *World) RemovePlayer(id string) { delete(w.Players, id) }
+// RemovePlayer drops a player from the simulation. losing someone mid-match
+// sends everyone back to the lobby: there is nobody left to play against, and
+// dropping into an abandoned rally would be worse than waiting.
+func (w *World) RemovePlayer(id string) {
+	delete(w.Players, id)
+
+	if w.Phase != PhaseLobby && len(w.Players) < PlayersPerMatch {
+		w.enterLobby()
+	}
+}
 
 // SideTaken reports whether someone already occupies a side.
 func (w *World) SideTaken(side Side) bool {
@@ -65,7 +76,13 @@ func (w *World) Step() {
 	}
 
 	switch w.Phase {
-	case PhaseFinished:
+	case PhaseLobby, PhaseFinished:
+		// the only way out of either is both players readying up. finished
+		// keeps the final score on screen until they do, so the loser gets
+		// to see what happened before a rematch wipes it
+		if w.everyoneReady() {
+			w.startMatch()
+		}
 		return
 
 	case PhaseScored:
@@ -94,6 +111,43 @@ func (w *World) Step() {
 	w.resolvePlayerHits()
 	w.resolveNet()
 	w.checkFloor()
+}
+
+// everyoneReady reports whether a full pair of players has said go.
+func (w *World) everyoneReady() bool {
+	if len(w.Players) != PlayersPerMatch {
+		return false
+	}
+	for _, p := range w.Players {
+		if !p.Ready {
+			return false
+		}
+	}
+	return true
+}
+
+// startMatch wipes the previous result and serves the first ball, so the same
+// room can host one match after another without reconnecting.
+func (w *World) startMatch() {
+	w.Score[SideLeft] = 0
+	w.Score[SideRight] = 0
+	w.Winner = ""
+	w.ServeSide = SideLeft
+	w.beginServe()
+}
+
+// enterLobby parks the match and clears everyone's readiness, so restarting
+// always takes a deliberate press rather than happening the instant someone
+// walks in.
+func (w *World) enterLobby() {
+	w.Phase = PhaseLobby
+	w.phaseTimer = 0
+	w.parkBall()
+
+	for _, p := range w.Players {
+		p.Ready = false
+		p.Reset()
+	}
 }
 
 // tickPhaseTimer counts the current phase down and reports whether it expired.
@@ -226,6 +280,11 @@ func (w *World) awardPoint(scorer Side) {
 	if w.Score[scorer] >= PointsToWin {
 		w.Phase = PhaseFinished
 		w.Winner = scorer
+		// cleared so a rematch needs both players to ask for it, rather than
+		// starting instantly off the readiness they set before this match
+		for _, p := range w.Players {
+			p.Ready = false
+		}
 		return
 	}
 
@@ -235,6 +294,19 @@ func (w *World) awardPoint(scorer Side) {
 
 // beginServe parks the ball above the serving side and resets both players.
 func (w *World) beginServe() {
+	w.parkBall()
+
+	for _, p := range w.Players {
+		p.Reset()
+	}
+
+	w.Phase = PhaseServe
+	w.phaseTimer = ServeHoldTicks
+}
+
+// parkBall puts a still ball above whoever serves next. split out of
+// beginServe so the lobby can show the same court without starting a rally.
+func (w *World) parkBall() {
 	spawnX := SpawnOffsetX
 	if w.ServeSide == SideRight {
 		spawnX = ArenaWidth - SpawnOffsetX
@@ -244,11 +316,4 @@ func (w *World) beginServe() {
 		Pos:    Vec2{X: spawnX, Y: ServeBallY},
 		Radius: BallRadius,
 	}
-
-	for _, p := range w.Players {
-		p.Reset()
-	}
-
-	w.Phase = PhaseServe
-	w.phaseTimer = ServeHoldTicks
 }

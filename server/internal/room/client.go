@@ -131,20 +131,36 @@ func (c *Client) handleMessage(raw []byte) {
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return
 	}
-	if env.Type != protocol.TypeInput || c.spectator {
+	// spectators have no player to drive, so nothing they send means anything
+	if c.spectator {
 		return
 	}
 
-	var in protocol.Input
-	if err := json.Unmarshal(env.Data, &in); err != nil {
-		return
-	}
+	switch env.Type {
+	case protocol.TypeInput:
+		var in protocol.Input
+		if err := json.Unmarshal(env.Data, &in); err != nil {
+			return
+		}
+		// dropped rather than queued if the room is busy: stale key state is
+		// worthless, the client resends it next frame anyway
+		select {
+		case c.room.inputs <- playerInput{playerID: c.playerID, keys: in.Keys}:
+		default:
+		}
 
-	// dropped rather than queued if the room is busy: stale key state is
-	// worthless, the client resends it next frame anyway
-	select {
-	case c.room.inputs <- playerInput{playerID: c.playerID, keys: in.Keys}:
-	default:
+	case protocol.TypeLobby:
+		var lb protocol.Lobby
+		if err := json.Unmarshal(env.Data, &lb); err != nil {
+			return
+		}
+		// never dropped, unlike input: readying up happens once and the
+		// client has no reason to repeat it, so losing it would strand
+		// everyone in the lobby
+		select {
+		case c.room.lobby <- lobbyUpdate{playerID: c.playerID, name: lb.Name, ready: lb.Ready}:
+		case <-c.room.quit:
+		}
 	}
 }
 

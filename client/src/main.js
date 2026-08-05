@@ -6,10 +6,14 @@ import { Input } from './input.js';
 import { SnapshotBuffer } from './interpolate.js';
 import { Renderer } from './render.js';
 import { RoomBar } from './ui.js';
+import { LobbyPanel } from './lobby.js';
 
 const canvas = document.getElementById('game');
 const input = new Input();
 const roomBar = new RoomBar(document.getElementById('room-bar'));
+const lobby = new LobbyPanel(document.getElementById('lobby'), {
+  onChange: (state) => connection.sendLobby(state),
+});
 
 // everything the renderer needs that is not part of the world snapshot
 const view = {
@@ -62,7 +66,10 @@ function frame(now) {
   connection.sendInput(input.keys);
 
   if (!renderer) return;
-  renderer.draw(buffer.sample(dt), view);
+
+  const world = buffer.sample(dt);
+  if (world) lobby.update(world, view);
+  renderer.draw(world, view);
 }
 
 requestAnimationFrame(frame);

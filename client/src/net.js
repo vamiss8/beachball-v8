@@ -33,6 +33,8 @@ export class Connection {
     this.reconnectTimer = null;
     this.reconnectDelay = RECONNECT_DELAY_MS;
     this.lastSentKeys = null;
+    this.lastSentLobby = null;
+    this.lastLobby = null;
   }
 
   connect() {
@@ -47,6 +49,7 @@ export class Connection {
       // the server keeps the last input it received, so a fresh connection
       // must resend the current key state instead of waiting for a change
       this.lastSentKeys = null;
+      this.resendLobby();
     });
 
     socket.addEventListener('message', (event) => this.handleMessage(event.data));
@@ -103,5 +106,29 @@ export class Connection {
     this.lastSentKeys = encoded;
 
     this.socket.send(JSON.stringify({ type: 'input', data: { keys } }));
+  }
+
+  // sendLobby reports the name and readiness. also deduplicated, since typing
+  // a name fires an event per keystroke, but remembered so a reconnect can
+  // restore what the player had already chosen
+  sendLobby(state) {
+    this.lastLobby = state;
+
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+
+    const encoded = JSON.stringify(state);
+    if (encoded === this.lastSentLobby) return;
+    this.lastSentLobby = encoded;
+
+    this.socket.send(JSON.stringify({ type: 'lobby', data: state }));
+  }
+
+  // resendLobby pushes the remembered lobby state onto a fresh socket. the
+  // new connection is a new player as far as the server is concerned, so
+  // without this a reconnect would land nameless and not ready
+  resendLobby() {
+    if (!this.lastLobby) return;
+    this.lastSentLobby = null;
+    this.sendLobby(this.lastLobby);
   }
 }
