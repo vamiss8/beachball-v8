@@ -48,6 +48,7 @@ server/
     ├── game/            the simulation itself, knows nothing about networking
     │   ├── config.go    every physics tunable in one place
     │   ├── types.go     Vec2, Side, Phase, Input
+    │   ├── name.go      cleaning up player-supplied names
     │   ├── player.go    movement, jump, dash, block, spin
     │   ├── ball.go      gravity, integration, walls
     │   └── world.go     simulation step, collisions, scoring, rally phases
@@ -146,6 +147,21 @@ room under that name, which means a shared link survives a server restart.
 A room closes itself a minute after the last person leaves, so a reload or a
 short wait for your opponent costs nothing.
 
+## The lobby
+
+Nothing is simulated until both seats say go. You type a name, press ready, and
+the match starts the moment the other side does the same. Skip the name and the
+game calls you by your colour.
+
+The same screen comes back when a match ends, so a rematch is one press each and
+the score wipes itself. If your opponent disconnects mid-rally you drop back to
+the lobby too — there is nobody to play against, and readiness is cleared so the
+next match always starts on purpose.
+
+Names are cut to 16 characters and stripped of control characters server-side.
+It is the only free text one player can put on another's screen, so none of it
+is taken on trust.
+
 ## Rules
 
 Before a serve the ball hangs in the air for a second so both players can get
@@ -158,7 +174,7 @@ winner serves. First to 15.
 - [x] Tests for the physics and the match rules
 - [x] Client: connect to the socket, render, interpolate
 - [x] Rooms by code and an invite link
-- [ ] Lobby, nicknames, ready checks
+- [x] Lobby, nicknames, ready checks
 - [ ] Sprites, sound, hit effects
 - [ ] 2v2 mode
 - [ ] Deployment
@@ -207,6 +223,7 @@ server/
     ├── game/            сама симуляция, про сеть не знает
     │   ├── config.go    все настройки физики в одном месте
     │   ├── types.go     Vec2, Side, Phase, Input
+    │   ├── name.go      cleaning up player-supplied names
     │   ├── player.go    движение, прыжок, даш, блок, вращение
     │   ├── ball.go      гравитация, интегрирование, стены
     │   └── world.go     шаг симуляции, коллизии, счёт, фазы раунда
@@ -303,6 +320,21 @@ go test ./...
 Комната закрывается через минуту после ухода последнего игрока, так что
 перезагрузка страницы или ожидание соперника ничего не стоят.
 
+## Лобби
+
+Пока оба места не скажут «готов», не считается ничего. Вводишь имя, жмёшь
+готовность — и матч стартует в тот момент, когда то же самое сделает соперник.
+Не ввёл имя — игра зовёт тебя по цвету.
+
+Тот же экран возвращается после матча: реванш — это одно нажатие с каждой
+стороны, счёт обнуляется сам. Если соперник отвалился посреди розыгрыша, ты тоже
+попадаешь в лобби — играть не с кем, — и готовность сбрасывается, чтобы
+следующий матч всегда начинался осознанно.
+
+Имя режется до 16 символов и чистится от управляющих на сервере. Это
+единственный свободный текст, который один игрок может показать другому, так что
+на слово ему не верят.
+
 ## Правила
 
 Перед подачей мяч висит в воздухе секунду, чтобы оба успели встать. Упал на
@@ -314,7 +346,7 @@ go test ./...
 - [x] Тесты физики и правил
 - [x] Клиент: подключение к сокету, отрисовка, интерполяция
 - [x] Комнаты по коду и ссылка-приглашение
-- [ ] Лобби, никнеймы, готовность
+- [x] Лобби, никнеймы, готовность
 - [ ] Спрайты, звук, эффекты ударов
 - [ ] Режим 2 на 2
 - [ ] Деплой
