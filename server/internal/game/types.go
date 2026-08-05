@@ -18,13 +18,16 @@ const (
 type Phase string
 
 const (
+	// waiting for two players to say they are ready. nothing is simulated
+	PhaseLobby Phase = "lobby"
 	// ball hangs in the air, players reposition, nothing scores yet
 	PhaseServe Phase = "serve"
 	// ball is live
 	PhasePlaying Phase = "playing"
 	// short freeze right after a point
 	PhaseScored Phase = "scored"
-	// match is over, someone reached PointsToWin
+	// match is over, someone reached PointsToWin. both players readying up
+	// again starts a rematch
 	PhaseFinished Phase = "finished"
 )
 

@@ -103,4 +103,11 @@ const (
 	ScoreFreezeTicks = 120
 
 	PointsToWin = 15
+
+	// a match needs exactly this many players; anyone else is a spectator
+	PlayersPerMatch = 2
+
+	// a long name would cover half the court, so names are cut to this many
+	// runes rather than bytes
+	MaxNameLength = 16
 )
