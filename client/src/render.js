@@ -1,11 +1,17 @@
 // canvas rendering. draws whatever world it is handed and nothing else: no
 // rules, no prediction, no state of its own beyond cosmetics.
 
+import { displayName } from './lobby.js';
+
 // radians of fake ball spin per unit of horizontal speed per tick
 const BALL_SPIN_PER_TICK = 0.01;
 
 // css pixels left free around the canvas so its border and shadow have room
 const VIEWPORT_MARGIN = 32;
+
+// name plate above a player, in arena units
+const NAME_SIZE = 30;
+const NAME_OFFSET = 18;
 
 const COLORS = {
   skyTop: '#4fc3f7',
@@ -161,6 +167,10 @@ export class Renderer {
     circle(ctx, eyeOffset + 16, -18, 5);
 
     ctx.restore();
+
+    // drawn outside the rotated block, or a smashing player would spin their
+    // own name upside down along with them
+    text(ctx, displayName(player), cx, player.pos.y - NAME_OFFSET, NAME_SIZE, 'center');
   }
 
   // how far the render clock moved since the previous frame, in ticks. the
@@ -223,13 +233,13 @@ export class Renderer {
 
     let message = null;
     if (world.phase === 'serve') {
-      // named by colour rather than side, since that is what the player sees
-      message = `${world.serveSide === 'left' ? 'GREEN' : 'BLUE'} SERVES`;
+      message = `${sideName(world, world.serveSide)} SERVES`;
     } else if (world.phase === 'scored') {
       message = 'POINT';
-    } else if (world.phase === 'finished') {
-      const won = world.winner === view.side;
-      message = view.spectator ? 'MATCH OVER' : won ? 'YOU WIN' : 'YOU LOSE';
+    } else if (world.phase === 'finished' && view.spectator) {
+      // the lobby panel covers this screen for players, so only a watcher
+      // still needs the result drawn on the court
+      message = `${sideName(world, world.winner)} WINS`;
     }
 
     if (message) text(ctx, message, centerX, centerY, 52 * this.scale, 'center');
@@ -249,6 +259,13 @@ export class Renderer {
       text(ctx, 'spectating: both sides are taken', x, y, size, 'left');
     }
   }
+}
+
+// sideName prefers whatever the player called themselves, falling back to the
+// colour of that half when the seat is empty or nameless
+function sideName(world, side) {
+  const player = Object.values(world.players).find((p) => p.side === side);
+  return (player ? displayName(player) : side === 'left' ? 'Green' : 'Blue').toUpperCase();
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
