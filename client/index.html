@@ -11,6 +11,14 @@
 <body>
   <canvas id="game"></canvas>
 
+  <!-- shown while the world is in the lobby or on a finished match -->
+  <div id="lobby" hidden>
+    <h1 data-lobby-heading>ready up</h1>
+    <input data-name type="text" maxlength="16" placeholder="your name" autocomplete="off" spellcheck="false">
+    <button data-ready type="button">i'm ready</button>
+    <p data-lobby-status></p>
+  </div>
+
   <!-- hidden until the server names the room we ended up in -->
   <div id="room-bar" hidden>
     <span class="room-bar__label">room</span>
