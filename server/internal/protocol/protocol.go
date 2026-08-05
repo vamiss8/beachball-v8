@@ -16,6 +16,7 @@ const (
 
 	// from client to server
 	TypeInput = "input"
+	TypeLobby = "lobby"
 )
 
 // Envelope is the outer shape of every message. Data is decoded lazily so a
@@ -74,9 +75,17 @@ type State struct {
 	World *game.World `json:"world"`
 }
 
-// Input is the only message a client is allowed to send.
+// Input carries the key state, sent whenever it changes.
 type Input struct {
 	Keys game.Input `json:"keys"`
+}
+
+// Lobby is what a player sends from the pre-match screen: the name they want
+// and whether they are ready to start. the name is sanitized server-side, so
+// nothing here is trusted as-is.
+type Lobby struct {
+	Name  string `json:"name"`
+	Ready bool   `json:"ready"`
 }
 
 // Encode wraps a payload in an envelope and marshals it.
