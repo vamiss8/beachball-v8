@@ -32,6 +32,11 @@ export class Input {
   }
 
   handle(event, pressed) {
+    // typing into the lobby must not steer the player, and more importantly
+    // the preventDefault below would otherwise swallow the letters a, d, w
+    // and s, leaving half the alphabet untypeable in the name field
+    if (event.target instanceof HTMLInputElement) return;
+
     const action = BINDINGS[event.code];
     if (!action) return;
 
