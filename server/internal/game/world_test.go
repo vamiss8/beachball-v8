@@ -15,6 +15,29 @@ func stepN(w *World, n int) {
 	}
 }
 
+// servingWorld skips the lobby and drops straight into a serve. the ball
+// tests care about physics, not about who pressed ready, and leaving the
+// players out keeps them from batting the ball they are meant to watch land.
+func servingWorld() *World {
+	w := NewWorld()
+	w.startMatch()
+	return w
+}
+
+// readyMatch is the lobby route: two players who both said go, stepped once
+// so the match has actually begun.
+func readyMatch() (*World, *Player, *Player) {
+	w := NewWorld()
+	left := w.AddPlayer("left", SideLeft)
+	right := w.AddPlayer("right", SideRight)
+
+	left.SetReady(true)
+	right.SetReady(true)
+	w.Step()
+
+	return w, left, right
+}
+
 // tapAgain releases every key for a tick and presses in again, which is the
 // second half of a double tap. the world is stepped twice.
 func tapAgain(w *World, p *Player, in Input) {
@@ -25,7 +48,7 @@ func tapAgain(w *World, p *Player, in Input) {
 }
 
 func TestServeHoldKeepsBallStill(t *testing.T) {
-	w := NewWorld()
+	w := servingWorld()
 	start := w.Ball.Pos
 
 	// one tick short of the hold expiring, the ball must not have moved
@@ -49,7 +72,7 @@ func TestServeHoldKeepsBallStill(t *testing.T) {
 }
 
 func TestBallGravityIsAppliedOncePerTick(t *testing.T) {
-	w := NewWorld()
+	w := servingWorld()
 	stepN(w, ServeHoldTicks) // release the ball
 
 	w.Step()
@@ -61,7 +84,7 @@ func TestBallGravityIsAppliedOncePerTick(t *testing.T) {
 }
 
 func TestUntouchedServeScoresForTheOtherSide(t *testing.T) {
-	w := NewWorld() // serve side is left, so the ball spawns on the left half
+	w := servingWorld() // serve side is left, so the ball spawns on the left half
 
 	// long enough for the ball to fall the whole arena height
 	for i := 0; i < 600 && w.Phase != PhaseScored; i++ {
@@ -81,7 +104,7 @@ func TestUntouchedServeScoresForTheOtherSide(t *testing.T) {
 }
 
 func TestMatchFinishesAtPointsToWin(t *testing.T) {
-	w := NewWorld()
+	w := servingWorld()
 
 	for i := 0; i < 600*PointsToWin*2 && w.Phase != PhaseFinished; i++ {
 		w.Step()
@@ -207,7 +230,7 @@ func TestSecondTapAfterTheWindowDoesNotDash(t *testing.T) {
 }
 
 func TestRunningPlayerCarriesTheBall(t *testing.T) {
-	w := NewWorld()
+	w := servingWorld()
 	p := w.AddPlayer("p1", SideLeft)
 	stepN(w, ServeHoldTicks) // into open play
 
@@ -231,7 +254,7 @@ func TestRunningPlayerCarriesTheBall(t *testing.T) {
 }
 
 func TestCarryingCountsAsOneHit(t *testing.T) {
-	w := NewWorld()
+	w := servingWorld()
 	p := w.AddPlayer("p1", SideLeft)
 	stepN(w, ServeHoldTicks)
 
@@ -246,6 +269,6 @@ func TestCarryingCountsAsOneHit(t *testing.T) {
 	// over a hundred hits here, which pinned ball gravity at its cap and
 	// left the rest of the rally unplayable
 	if w.Ball.HitCount > 10 {
-		t.Fatalf("hit count = %d after carrying, want a handful", w.Ball.HitCount)
+		t.Fatalf("hit count = %d after carrying, want a handful (was over a hundred)", w.Ball.HitCount)
 	}
 }
