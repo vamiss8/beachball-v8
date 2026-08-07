@@ -129,10 +129,7 @@ func (w *World) everyoneReady() bool {
 // startMatch wipes the previous result and serves the first ball, so the same
 // room can host one match after another without reconnecting.
 func (w *World) startMatch() {
-	w.Score[SideLeft] = 0
-	w.Score[SideRight] = 0
-	w.Winner = ""
-	w.ServeSide = SideLeft
+	w.resetMatch()
 	w.beginServe()
 }
 
@@ -142,12 +139,26 @@ func (w *World) startMatch() {
 func (w *World) enterLobby() {
 	w.Phase = PhaseLobby
 	w.phaseTimer = 0
+	// the abandoned score goes with it. nobody can play that match out, and
+	// the next one wipes the score anyway, so leaving it up only made the
+	// lobby look like a rally somebody was still in the middle of
+	w.resetMatch()
 	w.parkBall()
 
 	for _, p := range w.Players {
 		p.Ready = false
 		p.Reset()
 	}
+}
+
+// resetMatch drops the result of whatever came before. shared so that a match
+// abandoned mid-rally and one that never started leave the very same slate
+// behind, right down to which side the parked ball waits on.
+func (w *World) resetMatch() {
+	w.Score[SideLeft] = 0
+	w.Score[SideRight] = 0
+	w.Winner = ""
+	w.ServeSide = SideLeft
 }
 
 // tickPhaseTimer counts the current phase down and reports whether it expired.
