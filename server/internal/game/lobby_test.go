@@ -67,6 +67,37 @@ func TestLosingAPlayerMidMatchReturnsToTheLobby(t *testing.T) {
 	}
 }
 
+func TestAbandonedMatchLeavesACleanLobby(t *testing.T) {
+	w, _, _ := readyMatch()
+	stepN(w, ServeHoldTicks+30)
+
+	// a match well under way, with the right player serving next
+	w.Score[SideLeft] = 7
+	w.Score[SideRight] = 5
+	w.ServeSide = SideRight
+
+	w.RemovePlayer("right") // and then they close the tab
+
+	// that match can never be played out, so none of it may survive into the
+	// lobby the player left behind is now sitting in
+	if w.Score[SideLeft] != 0 || w.Score[SideRight] != 0 {
+		t.Fatalf("score = %v, want a clean slate", w.Score)
+	}
+	if w.Winner != "" {
+		t.Fatalf("winner = %q, want it cleared", w.Winner)
+	}
+
+	// down to the court itself: whoever walks in next must find the room
+	// looking exactly like one nobody has played in yet
+	fresh := NewWorld()
+	if w.ServeSide != fresh.ServeSide {
+		t.Fatalf("serveSide = %q, want %q as in a fresh lobby", w.ServeSide, fresh.ServeSide)
+	}
+	if w.Ball.Pos != fresh.Ball.Pos {
+		t.Fatalf("ball parked at %v, want %v as in a fresh lobby", w.Ball.Pos, fresh.Ball.Pos)
+	}
+}
+
 func TestFinishedMatchRestartsOnlyWhenBothReadyAgain(t *testing.T) {
 	w, left, right := readyMatch()
 
