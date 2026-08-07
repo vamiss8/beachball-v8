@@ -19,7 +19,6 @@ const lobby = new LobbyPanel(document.getElementById('lobby'), {
 const view = {
   status: 'connecting',
   playerId: null,
-  side: null,
   spectator: false,
 };
 
@@ -34,8 +33,10 @@ const connection = new Connection({
   // the arena and tick rate arrive with the welcome message, so the client
   // never hardcodes numbers the server owns
   onWelcome: (welcome) => {
+    // welcome.side is deliberately not kept: every player carries their own
+    // side in the snapshot and the renderer colours the court from that, so
+    // a copy here would only be a second source for the same fact
     view.playerId = welcome.playerId;
-    view.side = welcome.side;
     view.spectator = welcome.spectator;
 
     // the server names the room, including when it opened a fresh one for us
