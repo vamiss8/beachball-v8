@@ -120,6 +120,10 @@ canvas {
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
+  /* above the lobby, not under it. that screen is the one telling you to send
+     the invite link, and the overlay was swallowing every click on the button
+     that copies it */
+  z-index: 2;
 
   display: flex;
   align-items: center;
