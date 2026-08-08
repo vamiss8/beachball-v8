@@ -156,7 +156,9 @@ game calls you by your colour.
 The same screen comes back when a match ends, so a rematch is one press each and
 the score wipes itself. If your opponent disconnects mid-rally you drop back to
 the lobby too — there is nobody to play against, and readiness is cleared so the
-next match always starts on purpose.
+next match always starts on purpose. The half-played score goes with it: nobody
+can finish that match, so the room you are left waiting in looks like one nobody
+has played in yet.
 
 Names are cut to 16 characters and stripped of control characters server-side.
 It is the only free text one player can put on another's screen, so none of it
@@ -333,7 +335,9 @@ go test ./...
 Тот же экран возвращается после матча: реванш — это одно нажатие с каждой
 стороны, счёт обнуляется сам. Если соперник отвалился посреди розыгрыша, ты тоже
 попадаешь в лобби — играть не с кем, — и готовность сбрасывается, чтобы
-следующий матч всегда начинался осознанно.
+следующий матч всегда начинался осознанно. Недоигранный счёт уходит вместе с
+ней: доиграть тот матч всё равно некому, так что комната, в которой ты остался
+ждать, выглядит как та, где ещё никто не играл.
 
 Имя режется до 16 символов и чистится от управляющих на сервере. Это
 единственный свободный текст, который один игрок может показать другому, так что
