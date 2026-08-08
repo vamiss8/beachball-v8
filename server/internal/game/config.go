@@ -75,6 +75,9 @@ const (
 	FloorRestitution = 0.3
 	NetRestitution   = 0.3
 
+	// per-tick decay on the dead ball rolling out the freeze after a point
+	DeadBallFriction = 0.95
+
 	PlayerRestitution = 0.65 // normal bump
 	BlockRestitution  = 0.1  // block absorbs the ball
 	SmashRestitution  = 1.0  // spinning player smashes it back

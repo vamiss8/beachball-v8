@@ -91,7 +91,7 @@ func (w *World) Step() {
 		// fast enough to leave the arena and sit off screen for the whole
 		// freeze
 		w.Ball.Pos.X += w.Ball.Velocity.X
-		w.Ball.Velocity.X *= 0.95
+		w.Ball.Velocity.X *= DeadBallFriction
 		w.Ball.bounceOffWalls()
 		if w.tickPhaseTimer() {
 			w.beginServe()
