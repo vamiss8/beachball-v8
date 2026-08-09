@@ -13,7 +13,9 @@ import (
 )
 
 // MaxPlayers is how many people can actually play; everyone else spectates.
-const MaxPlayers = 2
+// taken from the simulation rather than repeated here, so a 2v2 mode only has
+// to be decided in one place.
+const MaxPlayers = game.PlayersPerMatch
 
 // EmptyRoomTTL is how long a room waits alone before closing. the grace
 // period is what lets someone reload the page, or arrive a moment before
