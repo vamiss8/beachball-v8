@@ -10,7 +10,7 @@ const RECONNECT_MAX_DELAY_MS = 10000;
 
 // the room code lives in the query string, which makes the address bar the
 // invite link. no code asks the server to open a fresh room and tell us which
-export function roomCodeFromURL() {
+function roomCodeFromURL() {
   return new URLSearchParams(location.search).get('room') ?? '';
 }
 
