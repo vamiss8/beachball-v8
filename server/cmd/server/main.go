@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,17 +20,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// devOrigin is the vite dev server, allowed by default so `npm run dev` works
+// against a locally running server without any extra configuration.
+const devOrigin = "http://localhost:5173"
+
 func main() {
-	addr := flag.String("addr", ":8080", "host:port to listen on")
-	static := flag.String("static", "../client/dist", "directory with the built web client")
-	dev := flag.String("dev-origin", "http://localhost:5173", "extra origin allowed to connect, for the vite dev server")
+	// defaults come from the environment so a container needs no arguments,
+	// and flags still win when one is passed
+	addr := flag.String("addr", defaultAddr(), "host:port to listen on ($PORT)")
+	static := flag.String("static", envOr("STATIC_DIR", "../client/dist"), "directory with the built web client ($STATIC_DIR)")
+	origins := flag.String("allowed-origins", envOr("ALLOWED_ORIGINS", devOrigin), "comma separated origins allowed to open sockets, on top of the host we are served from ($ALLOWED_ORIGINS)")
 	flag.Parse()
 
 	rooms := room.NewManager()
 	defer rooms.CloseAll()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", wsHandler(rooms, *dev))
+	mux.HandleFunc("/ws", wsHandler(rooms, parseOrigins(*origins)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
@@ -64,11 +71,11 @@ func main() {
 
 // wsHandler upgrades a request and hands the connection to the room named in
 // the query string. no code means "open me a fresh room".
-func wsHandler(rooms *room.Manager, devOrigin string) http.HandlerFunc {
+func wsHandler(rooms *room.Manager, allowed map[string]bool) http.HandlerFunc {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		CheckOrigin:     originChecker(devOrigin),
+		CheckOrigin:     originChecker(allowed),
 	}
 
 	return func(w http.ResponseWriter, req *http.Request) {
@@ -97,16 +104,21 @@ func wsHandler(rooms *room.Manager, devOrigin string) http.HandlerFunc {
 }
 
 // originChecker only accepts connections from the page we serve ourselves,
-// plus the dev server origin. this is what stops a random website from
+// plus any origin listed explicitly. this is what stops a random website from
 // opening sockets against this server in a visitor's browser.
-func originChecker(devOrigin string) func(*http.Request) bool {
+//
+// the explicit list exists for deployments behind a reverse proxy: most
+// proxies pass the public Host through and the comparison below just works,
+// but one that rewrites it would leave every real player looking like a
+// forgery, and the list is the way out of that.
+func originChecker(allowed map[string]bool) func(*http.Request) bool {
 	return func(req *http.Request) bool {
 		origin := req.Header.Get("Origin")
 		if origin == "" {
 			// non-browser client, nothing to forge
 			return true
 		}
-		if devOrigin != "" && origin == devOrigin {
+		if allowed[origin] {
 			return true
 		}
 		u, err := url.Parse(origin)
@@ -117,8 +129,39 @@ func originChecker(devOrigin string) func(*http.Request) bool {
 	}
 }
 
-// staticHandler serves the built client, falling back to index.html so the
-// game can be opened by a direct link to any path.
+// parseOrigins turns a comma separated list into a set. blanks are skipped, so
+// a trailing comma or an empty variable is harmless rather than a rule that
+// matches an empty origin.
+func parseOrigins(raw string) map[string]bool {
+	allowed := make(map[string]bool)
+	for _, origin := range strings.Split(raw, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			allowed[origin] = true
+		}
+	}
+	return allowed
+}
+
+// defaultAddr reads the port a platform assigned us. paas hosts hand it over
+// in $PORT and expect the app to listen there, not on a port of its choosing.
+func defaultAddr() string {
+	if port := os.Getenv("PORT"); port != "" {
+		return ":" + port
+	}
+	return ":8080"
+}
+
+// envOr reads a setting from the environment, falling back to def.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// staticHandler serves the built client. no single-page fallback is needed:
+// a room lives in the query string, so every link people share is still the
+// site root and the file server can answer it directly.
 func staticHandler(dir string) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
