@@ -106,13 +106,39 @@ go run ./cmd/server
 
 Open http://localhost:8080 and send the same link to your opponent.
 
-### Flags
+### Configuration
 
-| Flag | Default | What it does |
-| ---- | ------- | ------------ |
-| `-addr` | `:8080` | listen address |
-| `-static` | `../client/dist` | directory with the built client |
-| `-dev-origin` | `http://localhost:5173` | allow connections from vite |
+Flags win over environment variables, and the environment is what a container
+uses, so an image runs with no arguments at all.
+
+| Flag | Variable | Default | What it does |
+| ---- | -------- | ------- | ------------ |
+| `-addr` | `PORT` | `:8080` | listen address; `PORT` is a number, since that is how hosting platforms hand one over |
+| `-static` | `STATIC_DIR` | `../client/dist` | directory with the built client |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | `http://localhost:5173` | comma separated origins allowed to open sockets, on top of the host we are served from |
+
+A socket is accepted when its `Origin` matches the host the page came from, so
+`ALLOWED_ORIGINS` is usually only the vite dev server. It exists for proxies
+that rewrite the `Host` header: most pass the public one through and the plain
+comparison works, but one that does not would make every real player look like
+a forgery.
+
+## Docker
+
+```bash
+docker build -t beachball .
+```
+
+```bash
+docker run --rm -p 8080:8080 beachball
+```
+
+Then http://localhost:8080. Nothing else needs installing — the image builds
+the client with node and the server with go in separate stages, then throws
+both toolchains away. What ships is a distroless image of about 15 MB: a static
+binary, the built client, no shell and no package manager.
+
+`/healthz` answers 200 for whatever the platform uses as a health check.
 
 ## Tests
 
@@ -283,13 +309,39 @@ go run ./cmd/server
 
 Открываем http://localhost:8080, туда же зовём второго.
 
-### Флаги
+### Настройки
 
-| Флаг | По умолчанию | Зачем |
-| ---- | ------------ | ----- |
-| `-addr` | `:8080` | адрес прослушивания |
-| `-static` | `../client/dist` | папка со сборкой клиента |
-| `-dev-origin` | `http://localhost:5173` | разрешить подключения с vite |
+Флаги перебивают переменные окружения, а окружением пользуется контейнер —
+поэтому образ запускается вообще без аргументов.
+
+| Флаг | Переменная | По умолчанию | Зачем |
+| ---- | ---------- | ------------ | ----- |
+| `-addr` | `PORT` | `:8080` | адрес прослушивания; в `PORT` лежит число, потому что именно так его выдают хостинги |
+| `-static` | `STATIC_DIR` | `../client/dist` | папка со сборкой клиента |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | `http://localhost:5173` | origin'ы через запятую, которым разрешено открывать сокет, вдобавок к хосту, с которого отдана страница |
+
+Сокет принимается, если его `Origin` совпадает с хостом страницы, так что
+`ALLOWED_ORIGINS` обычно — это только dev-сервер vite. Переменная нужна для
+прокси, переписывающих `Host`: большинство пробрасывает публичный, и обычного
+сравнения хватает, но тот, который его меняет, превратил бы каждого живого
+игрока в подделку.
+
+## Docker
+
+```bash
+docker build -t beachball .
+```
+
+```bash
+docker run --rm -p 8080:8080 beachball
+```
+
+Дальше http://localhost:8080. Ставить больше ничего не нужно: образ собирает
+клиент через node и сервер через go отдельными стадиями, а потом выбрасывает
+оба тулчейна. Наружу уезжает distroless-образ примерно на 15 МБ — статический
+бинарник, собранный клиент, без шелла и пакетного менеджера.
+
+`/healthz` отвечает 200 — на случай, если платформе нужен health check.
 
 ## Тесты
 
