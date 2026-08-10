@@ -1,0 +1,12 @@
+# everything here is either rebuilt inside the image or has no business in it
+
+.git
+.gitignore
+
+**/node_modules
+client/dist
+
+server/server
+server/server.exe
+
+*.md
