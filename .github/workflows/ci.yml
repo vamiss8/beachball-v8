@@ -1,0 +1,99 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# a new push to the same branch makes the previous run pointless
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: build
+        working-directory: server
+        run: go build ./...
+
+      - name: vet
+        working-directory: server
+        run: go vet ./...
+
+      - name: test
+        working-directory: server
+        # -race catches the kind of bug this codebase is most exposed to: the
+        # room goroutine owning state that pumps and the manager touch
+        run: go test -race ./...
+
+      - name: gofmt
+        working-directory: server
+        # gofmt has no failing exit code of its own, so an empty listing is
+        # what "formatted" looks like
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: install
+        working-directory: client
+        run: npm ci
+
+      - name: build
+        working-directory: client
+        run: npm run build
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # builds every stage, including the client one that a local network
+      # could not get through, then runs the result to prove it serves
+      - name: build image
+        run: docker build -t beachball:ci .
+
+      - name: run it
+        run: |
+          docker run -d --rm --name beachball -p 8080:8080 beachball:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/healthz >/dev/null; then
+              echo "server is up"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: check it serves the game
+        run: |
+          curl -sf http://localhost:8080/healthz >/dev/null
+          curl -sf http://localhost:8080/ | grep -q '<canvas id="game">'
+          # a code the server could never have issued must be refused
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8080/ws?room=ABC0')" = "400"
+
+      - name: stop
+        if: always()
+        run: docker stop beachball || true
