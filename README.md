@@ -1,5 +1,7 @@
 # beachball-v8
 
+[![ci](https://github.com/vamiss8/beachball-v8/actions/workflows/ci.yml/badge.svg)](https://github.com/vamiss8/beachball-v8/actions/workflows/ci.yml)
+
 Two-player arcade volleyball in the browser · Аркадный волейбол в браузере на двоих
 
 [English](#english) · [Русский](#russian)
