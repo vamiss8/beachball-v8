@@ -1,0 +1,26 @@
+# keeps editors from re-indenting a file the moment someone opens it in a
+# different one. matches what the code already looks like rather than
+# introducing a new style.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.go]
+indent_style = tab
+
+[*.{js,json,html,css,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[Dockerfile]
+indent_style = space
+indent_size = 4
+
+# trailing spaces are a line break in markdown, so stripping them would
+# silently reflow the readme
+[*.md]
+trim_trailing_whitespace = false
