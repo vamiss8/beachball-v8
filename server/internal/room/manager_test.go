@@ -23,8 +23,8 @@ func TestJoinOpensAFreshRoomForAnEmptyCode(t *testing.T) {
 	if first == second {
 		t.Fatal("two players arriving without a link landed in the same room")
 	}
-	if m.Count() != 2 {
-		t.Fatalf("live rooms = %d, want 2", m.Count())
+	if m.count() != 2 {
+		t.Fatalf("live rooms = %d, want 2", m.count())
 	}
 }
 
@@ -47,8 +47,8 @@ func TestJoinReusesARoomByItsCode(t *testing.T) {
 	if guest != host {
 		t.Fatal("the invite link opened a different room")
 	}
-	if m.Count() != 1 {
-		t.Fatalf("live rooms = %d, want 1", m.Count())
+	if m.count() != 1 {
+		t.Fatalf("live rooms = %d, want 1", m.count())
 	}
 }
 
@@ -62,8 +62,8 @@ func TestJoinRejectsCodesThatCouldNotHaveBeenIssued(t *testing.T) {
 		}
 	}
 
-	if m.Count() != 0 {
-		t.Fatalf("live rooms = %d, want 0: junk codes must not allocate", m.Count())
+	if m.count() != 0 {
+		t.Fatalf("live rooms = %d, want 0: junk codes must not allocate", m.count())
 	}
 }
 
@@ -81,8 +81,8 @@ func TestForgetDropsARoomFromTheRegistry(t *testing.T) {
 	m.forget(code)
 	first.Close()
 
-	if m.Count() != 0 {
-		t.Fatalf("live rooms = %d, want 0", m.Count())
+	if m.count() != 0 {
+		t.Fatalf("live rooms = %d, want 0", m.count())
 	}
 
 	// the code is free again, so an old link opens a new match rather than

@@ -57,8 +57,9 @@ func (m *Manager) Join(rawCode string) (*Room, error) {
 	return m.insert(code)
 }
 
-// Count reports how many rooms are live, for logging and tests.
-func (m *Manager) Count() int {
+// count reports how many rooms are live. unexported: nothing outside the
+// package has a use for it, and the tests live in here anyway.
+func (m *Manager) count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.rooms)
