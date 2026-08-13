@@ -114,6 +114,13 @@ canvas {
   font-size: 15px;
 }
 
+/* the match length, quieter than the line about the opponent above it */
+#lobby .lobby__rules {
+  min-height: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
 /* the invite bar floats over the sand, where nothing important is drawn */
 #room-bar {
   position: fixed;

@@ -20,6 +20,7 @@ const view = {
   status: 'connecting',
   playerId: null,
   spectator: false,
+  pointsToWin: null,
 };
 
 let renderer = null;
@@ -38,6 +39,7 @@ const connection = new Connection({
     // a copy here would only be a second source for the same fact
     view.playerId = welcome.playerId;
     view.spectator = welcome.spectator;
+    view.pointsToWin = welcome.arena.pointsToWin;
 
     // the server names the room, including when it opened a fresh one for us
     roomBar.show(welcome.roomId);

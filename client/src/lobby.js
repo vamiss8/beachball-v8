@@ -19,6 +19,7 @@ export class LobbyPanel {
     this.readyButton = root.querySelector('[data-ready]');
     this.statusEl = root.querySelector('[data-lobby-status]');
     this.headingEl = root.querySelector('[data-lobby-heading]');
+    this.rulesEl = root.querySelector('[data-lobby-rules]');
 
     this.ready = false;
 
@@ -56,6 +57,10 @@ export class LobbyPanel {
     this.readyButton.textContent = this.ready ? "waiting — i'm ready" : "i'm ready";
     this.readyButton.classList.toggle('is-ready', this.ready);
     this.statusEl.textContent = describeOpponent(world, view);
+
+    // the target score comes down with the arena, and this screen is the one
+    // place with room to say it before anyone commits to a match
+    this.rulesEl.textContent = view.pointsToWin ? `first to ${view.pointsToWin}` : '';
   }
 }
 
