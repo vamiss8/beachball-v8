@@ -236,10 +236,12 @@ export class Renderer {
       message = `${sideName(world, world.serveSide)} SERVES`;
     } else if (world.phase === 'scored') {
       message = 'POINT';
-    } else if (world.phase === 'finished' && view.spectator) {
-      // the lobby panel covers this screen for players, so only a watcher
-      // still needs the result drawn on the court
+    } else if (view.spectator && world.phase === 'finished') {
+      // the lobby panel covers these two screens for players, so a watcher is
+      // the only one left with an empty court and no idea why nothing moves
       message = `${sideName(world, world.winner)} WINS`;
+    } else if (view.spectator && world.phase === 'lobby') {
+      message = 'WAITING FOR PLAYERS';
     }
 
     if (message) text(ctx, message, centerX, centerY, 52 * this.scale, 'center');
