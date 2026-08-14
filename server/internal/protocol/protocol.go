@@ -13,10 +13,12 @@ const (
 	// from server to client
 	TypeWelcome = "welcome"
 	TypeState   = "state"
+	TypePong    = "pong"
 
 	// from client to server
 	TypeInput = "input"
 	TypeLobby = "lobby"
+	TypePing  = "ping"
 )
 
 // Envelope is the outer shape of every message. Data is decoded lazily so a
@@ -87,6 +89,15 @@ type Lobby struct {
 	Name  string `json:"name"`
 	Ready bool   `json:"ready"`
 }
+
+// a ping carries whatever the client wants echoed back, and the server returns
+// it untouched. no struct for it here on purpose: the payload means something
+// only to the client that sent it, so the server never parses it and cannot
+// disagree with the client about what a timestamp is.
+//
+// this exists because the websocket protocol's own ping and pong frames are
+// handled by the browser itself and never surface in javascript, so a client
+// has no way to time them.
 
 // Encode wraps a payload in an envelope and marshals it.
 func Encode(msgType string, payload any) ([]byte, error) {
