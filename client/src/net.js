@@ -8,6 +8,26 @@
 const RECONNECT_DELAY_MS = 500;
 const RECONNECT_MAX_DELAY_MS = 10000;
 
+// how often a round trip is measured. often enough to notice a link going bad
+// mid-match, rare enough that the measuring costs nothing worth counting
+const PING_INTERVAL_MS = 2000;
+
+// the readout is the median of this many samples. a median rather than an
+// average because one packet caught behind something else should not be able
+// to drag the number the player is looking at
+const PING_SAMPLES = 5;
+
+// median of a short list, which is allowed to sort a copy since the caller
+// keeps its samples in the order they arrived
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
 // the room code lives in the query string, which makes the address bar the
 // invite link. no code asks the server to open a fresh room and tell us which
 function roomCodeFromURL() {
@@ -24,10 +44,11 @@ function socketURL() {
 }
 
 export class Connection {
-  constructor({ onWelcome, onSnapshot, onStatus }) {
+  constructor({ onWelcome, onSnapshot, onStatus, onPing }) {
     this.onWelcome = onWelcome;
     this.onSnapshot = onSnapshot;
     this.onStatus = onStatus;
+    this.onPing = onPing ?? (() => {});
 
     this.socket = null;
     this.reconnectTimer = null;
@@ -35,6 +56,9 @@ export class Connection {
     this.lastSentKeys = null;
     this.lastSentLobby = null;
     this.lastLobby = null;
+
+    this.pingTimer = null;
+    this.pingSamples = [];
   }
 
   connect() {
@@ -50,12 +74,14 @@ export class Connection {
       // must resend the current key state instead of waiting for a change
       this.lastSentKeys = null;
       this.resendLobby();
+      this.startPinging();
     });
 
     socket.addEventListener('message', (event) => this.handleMessage(event.data));
 
     socket.addEventListener('close', () => {
       this.onStatus('disconnected');
+      this.stopPinging();
       this.scheduleReconnect();
     });
 
@@ -75,6 +101,44 @@ export class Connection {
     }, delay);
   }
 
+  // startPinging measures the round trip on a timer for as long as this
+  // socket lives. a reconnect starts a new socket, and its samples start
+  // fresh: the old ones described a link that is already gone
+  startPinging() {
+    this.stopPinging();
+    this.pingSamples = [];
+
+    this.sendPing();
+    this.pingTimer = setInterval(() => this.sendPing(), PING_INTERVAL_MS);
+  }
+
+  stopPinging() {
+    clearInterval(this.pingTimer);
+    this.pingTimer = null;
+  }
+
+  sendPing() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+
+    // the server echoes this back untouched, so the clock never leaves this
+    // page and the two sides never have to agree on what time it is
+    this.socket.send(JSON.stringify({ type: 'ping', data: { sentAt: performance.now() } }));
+  }
+
+  recordPong(data) {
+    const sentAt = data?.sentAt;
+    // a pong we did not ask for, or one mangled on the way, measures nothing
+    if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) return;
+
+    const rtt = performance.now() - sentAt;
+    if (rtt < 0) return;
+
+    this.pingSamples.push(rtt);
+    if (this.pingSamples.length > PING_SAMPLES) this.pingSamples.shift();
+
+    this.onPing(median(this.pingSamples));
+  }
+
   handleMessage(raw) {
     let envelope;
     try {
@@ -89,6 +153,9 @@ export class Connection {
         break;
       case 'state':
         this.onSnapshot(envelope.data.world);
+        break;
+      case 'pong':
+        this.recordPong(envelope.data);
         break;
       default:
         break;
