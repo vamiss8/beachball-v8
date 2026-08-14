@@ -175,6 +175,13 @@ room under that name, which means a shared link survives a server restart.
 A room closes itself a minute after the last person leaves, so a reload or a
 short wait for your opponent costs nothing.
 
+The bar also shows the round trip to the server, measured every couple of
+seconds. Under 60ms a rally plays clean; past 150ms you start swinging at where
+the ball used to be. The websocket protocol has ping frames of its own, but the
+browser answers those itself and never surfaces them to javascript, so this
+rides on the game protocol instead: the client sends a timestamp and the server
+echoes it back without ever parsing it.
+
 ## The lobby
 
 Nothing is simulated until both seats say go. You type a name, press ready, and
@@ -376,6 +383,12 @@ go test ./...
 продиктовать вслух и не переспрашивать. Код, которого никогда не существовало,
 всё равно открывает комнату с этим именем — так ссылка переживает перезапуск
 сервера.
+
+Там же показывается пинг до сервера — замеряется каждые пару секунд. До 60 мс
+розыгрыш идёт чисто, после 150 начинаешь бить туда, где мяч был. У протокола
+websocket есть свои ping-фреймы, но браузер отвечает на них сам и в javascript
+их не показывает, поэтому замер едет поверх игрового протокола: клиент шлёт
+метку времени, а сервер возвращает её обратно, ни разу не заглянув внутрь.
 
 Комната закрывается через минуту после ухода последнего игрока, так что
 перезагрузка страницы или ожидание соперника ничего не стоят.
