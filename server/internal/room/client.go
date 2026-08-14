@@ -22,6 +22,11 @@ const (
 
 	// buffered so a brief network hiccup does not cost the client its seat
 	sendBufferSize = 32
+
+	// the shortest gap between two answered pings. the client asks every
+	// couple of seconds, so this only ever trims a client asking far more
+	// often than any measurement of its own could use
+	minPingInterval = 250 * time.Millisecond
 )
 
 // Client is one websocket connection. reads and writes each get their own
@@ -35,6 +40,9 @@ type Client struct {
 	playerID  string
 	side      game.Side
 	spectator bool
+
+	// touched only by readPump, which is the only goroutine answering pings
+	lastPingReply time.Time
 
 	closed chan struct{}
 }
@@ -131,7 +139,15 @@ func (c *Client) handleMessage(raw []byte) {
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return
 	}
-	// spectators have no player to drive, so nothing they send means anything
+	// answered before the spectator check, since watching a match is exactly
+	// when someone wants to know whether their connection is the problem
+	if env.Type == protocol.TypePing {
+		c.replyToPing(env.Data)
+		return
+	}
+
+	// spectators have no player to drive, so nothing else they send means
+	// anything
 	if c.spectator {
 		return
 	}
@@ -162,6 +178,31 @@ func (c *Client) handleMessage(raw []byte) {
 		case <-c.room.quit:
 		}
 	}
+}
+
+// replyToPing echoes a ping payload straight back.
+//
+// answered here in the read goroutine rather than by handing it to the room:
+// a round trip is meant to measure the network, and queueing it behind a tick
+// would fold the simulation's own timing into the number. it also means the
+// reading side never blocks on the room being busy.
+//
+// the payload is passed through as raw json without being parsed. the server
+// has no opinion about what a client puts in there.
+func (c *Client) replyToPing(payload json.RawMessage) {
+	// a client that pings faster than this learns nothing extra, so the
+	// spare ones are dropped rather than answered
+	now := time.Now()
+	if now.Sub(c.lastPingReply) < minPingInterval {
+		return
+	}
+	c.lastPingReply = now
+
+	msg, err := protocol.Encode(protocol.TypePong, payload)
+	if err != nil {
+		return
+	}
+	c.trySend(msg)
 }
 
 // writePump drains the send queue and keeps the connection alive with pings.
