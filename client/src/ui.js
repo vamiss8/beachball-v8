@@ -9,6 +9,7 @@ export class RoomBar {
   constructor(root) {
     this.root = root;
     this.codeEl = root.querySelector('[data-room-code]');
+    this.pingEl = root.querySelector('[data-ping]');
     this.button = root.querySelector('[data-copy-link]');
     this.buttonLabel = this.button.textContent;
     this.flashTimer = null;
@@ -23,6 +24,26 @@ export class RoomBar {
     // without switching between them
     document.title = `beachball · ${code}`;
     rememberRoom(code);
+  }
+
+  // showPing writes the latest round trip. the thresholds are about what the
+  // game feels like rather than what a network engineer would call good: under
+  // 60ms a rally plays clean, past 150ms you start swinging at where the ball
+  // used to be
+  showPing(rtt) {
+    const ms = Math.round(rtt);
+    this.pingEl.textContent = `${ms} ms`;
+
+    this.pingEl.classList.toggle('is-good', ms < 60);
+    this.pingEl.classList.toggle('is-fair', ms >= 60 && ms < 150);
+    this.pingEl.classList.toggle('is-poor', ms >= 150);
+  }
+
+  // clearPing marks the readout stale, so a frozen number is never mistaken
+  // for a live one while the socket is down
+  clearPing() {
+    this.pingEl.textContent = '—';
+    this.pingEl.classList.remove('is-good', 'is-fair', 'is-poor');
   }
 
   async copyInviteLink() {

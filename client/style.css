@@ -177,3 +177,25 @@ canvas {
 .room-bar__button:hover {
   filter: brightness(1.1);
 }
+
+.room-bar__ping {
+  min-width: 56px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  /* tabular figures, or the bar twitches every time the number changes width */
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.room-bar__ping.is-good {
+  color: #66bb6a;
+}
+
+.room-bar__ping.is-fair {
+  color: #ffa726;
+}
+
+.room-bar__ping.is-poor {
+  color: #ef5350;
+}

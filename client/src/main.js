@@ -29,7 +29,10 @@ let buffer = null;
 const connection = new Connection({
   onStatus: (status) => {
     view.status = status;
+    if (status !== 'connected') roomBar.clearPing();
   },
+
+  onPing: (rtt) => roomBar.showPing(rtt),
 
   // the arena and tick rate arrive with the welcome message, so the client
   // never hardcodes numbers the server owns
