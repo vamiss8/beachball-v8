@@ -169,6 +169,31 @@ func staticHandler(dir string) http.Handler {
 			http.Error(w, "client is not built yet: run `npm run build` in ./client", http.StatusNotFound)
 			return
 		}
+		// go sniffs a content type from the bytes when the extension does not
+		// give one away, and a browser doing its own sniffing on top can talk
+		// itself into running a file as a script. the type we send is the one
+		// that counts
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		setCacheControl(w, r.URL.Path)
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// setCacheControl decides how long a file may be reused.
+//
+// vite writes a hash of the contents into every asset filename, so one of
+// those urls can never come back with something different and may be kept for
+// good. index.html is the opposite: its name never changes and it points at
+// those hashes, so a cached copy would go on asking for asset files that the
+// next deploy has already removed.
+func setCacheControl(w http.ResponseWriter, path string) {
+	if strings.HasPrefix(path, "/assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+
+	// not "do not store": the browser may keep it, it just has to ask whether
+	// it is still current, which a 304 answers without resending the page
+	w.Header().Set("Cache-Control", "no-cache")
 }
