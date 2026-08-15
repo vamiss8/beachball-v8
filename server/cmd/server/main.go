@@ -49,6 +49,12 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// said once at startup rather than left to be discovered by whoever opens
+	// the page first and gets a 404 with no idea the path is simply wrong
+	if _, err := os.Stat(*static); errors.Is(err, os.ErrNotExist) {
+		log.Printf("warning: static dir %q does not exist, the client will 404 until it is built", *static)
+	}
+
 	go func() {
 		log.Printf("server listening on %s (static: %s)", *addr, *static)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
