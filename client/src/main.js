@@ -47,7 +47,7 @@ const connection = new Connection({
     // the server names the room, including when it opened a fresh one for us
     roomBar.show(welcome.roomId);
 
-    // rebuilt only once: the arena never changes, and a fresh Renderer on
+    // rebuilt only once: arena never changes, and a fresh Renderer on
     // every reconnect would stack up another resize listener each time
     renderer ??= new Renderer(canvas, welcome.arena);
     buffer = new SnapshotBuffer(welcome.arena.tickRate);
