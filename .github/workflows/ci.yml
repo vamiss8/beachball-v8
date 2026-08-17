@@ -10,9 +10,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# nothing here writes anything back, and the default token can push commits,
+# open issues and publish packages. narrowed once at the top so a job added
+# later starts from read-only rather than inheriting the lot
+permissions:
+  contents: read
+
 jobs:
   server:
     runs-on: ubuntu-latest
+    # a hung step otherwise sits there burning the account's minutes until
+    # github's own six hour limit finally kills it
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +58,7 @@ jobs:
 
   client:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -68,6 +78,8 @@ jobs:
 
   image:
     runs-on: ubuntu-latest
+    # longer than the other two: this one builds both toolchains from scratch
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
