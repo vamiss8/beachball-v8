@@ -19,7 +19,7 @@ var (
 
 // Manager owns every live room and hands each connection to the right one.
 //
-// this is the only place in the package that takes a lock. rooms themselves
+// this is the only place in the package that takes a lock: rooms themselves
 // stay lock-free because each one is driven by its own goroutine; the map of
 // rooms is not game state, so guarding it with a mutex is fine.
 type Manager struct {

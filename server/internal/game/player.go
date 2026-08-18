@@ -81,10 +81,10 @@ func (p *Player) Reset() {
 	p.touchingBall = false
 }
 
-// groundLevel is the y where a player's top edge rests on the sand.
+// groundLevel is the y where a player's top edge rests on the sand
 func groundLevel() float64 { return GroundY - PlayerHeight }
 
-// step advances one player by a single tick.
+// step advances one player by a single tick
 func (p *Player) step() {
 	p.stepHorizontal()
 	p.stepVertical()

@@ -68,7 +68,7 @@ const (
 	BallGravityPerHit = 0.01
 	BallGravityMax    = 0.9
 
-	// terminal velocity, prevents game-breaking speeds
+	// terminal velocity that prevents game-breaking speeds
 	BallMaxSpeed = 25.0
 
 	WallRestitution  = 0.8
