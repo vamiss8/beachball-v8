@@ -91,7 +91,7 @@ const (
 	AimTransferY = 0.15
 
 	// a contact at least this square on top of the head counts as carrying
-	// rather than hitting: 1.0 is straight down, 0 is a graze off the side
+	// rather than hitting - 1.0 is straight down and 0 is a graze off the side
 	CarryTopness = 0.85
 	// carrying pulls the ball toward the player's own speed instead of just
 	// nudging it, so a running player keeps it overhead
