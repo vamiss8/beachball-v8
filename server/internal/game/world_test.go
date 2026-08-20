@@ -216,7 +216,7 @@ func TestSecondTapAfterTheWindowDoesNotDash(t *testing.T) {
 	p.SetInput(Input{Right: true})
 	w.Step()
 	p.SetInput(Input{})
-	stepN(w, DoubleTapWindowTicks+1) // let the pairing expire
+	stepN(w, DoubleTapWindowTicks+1) // stepN to let the pairing expire
 
 	p.SetInput(Input{Right: true})
 	w.Step()
