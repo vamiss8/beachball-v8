@@ -42,6 +42,18 @@ canvas {
   box-sizing: content-box;
 }
 
+/* centred over the empty canvas, since it is the only thing on the page */
+.noscript {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 18px;
+}
+
 /* the lobby covers the court: there is nothing to watch until the match runs */
 #lobby {
   position: fixed;
