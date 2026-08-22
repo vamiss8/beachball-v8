@@ -47,6 +47,11 @@ func main() {
 		Addr:              *addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
+		// without this a keep-alive connection that goes quiet is held open
+		// for good, and anything scanning the internet leaves a pile of them
+		// behind. game sockets are unaffected: an upgraded connection is
+		// hijacked out of the http server and no longer subject to its clock
+		IdleTimeout: 120 * time.Second,
 	}
 
 	// said once at startup rather than left to be discovered by whoever opens
