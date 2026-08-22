@@ -41,6 +41,14 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/beachball ./cmd/se
 # put there ourselves
 FROM gcr.io/distroless/static-debian12:nonroot
 
+# standard labels: registries and tools read these to link an image back to
+# the code it came from, which is the only way to tell later what is inside a
+# tag that has no shell to look around in
+LABEL org.opencontainers.image.title="beachball" \
+      org.opencontainers.image.description="Two-player arcade volleyball in the browser" \
+      org.opencontainers.image.source="https://github.com/vamiss8/beachball-v8" \
+      org.opencontainers.image.licenses="MIT"
+
 COPY --from=server /out/beachball /app/beachball
 COPY --from=client /src/client/dist /app/client
 
