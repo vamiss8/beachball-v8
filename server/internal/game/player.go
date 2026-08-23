@@ -190,7 +190,7 @@ func (p *Player) clampToOwnHalf() {
 }
 
 func (p *Player) stepVertical() {
-	// jump triggers on the rising edge only, holding the key does nothing
+	// jump triggers on the rising edge only, while holding the key does nothing
 	justPressed := p.input.Jump && !p.prevJump
 	p.prevJump = p.input.Jump
 
