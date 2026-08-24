@@ -13,6 +13,12 @@ const VIEWPORT_MARGIN = 32;
 const NAME_SIZE = 30;
 const NAME_OFFSET = 18;
 
+// ball shadow, in arena units. it is gone by the time the ball is roughly the
+// height of the net, past which the exact height stops being readable anyway
+const SHADOW_FADE_HEIGHT = 520;
+const SHADOW_MAX_ALPHA = 0.28;
+const SHADOW_DROP = 10;
+
 const COLORS = {
   skyTop: '#4fc3f7',
   skyBottom: '#b3e5fc',
@@ -90,6 +96,9 @@ export class Renderer {
 
     if (world) {
       this.drawNet();
+      // under everything, so a player standing on the spot covers their own
+      // patch of sand rather than the shadow floating over their feet
+      this.drawBallShadow(world.ball);
       for (const player of Object.values(world.players)) {
         this.drawPlayer(player, player.id === view.playerId);
       }
@@ -183,6 +192,27 @@ export class Renderer {
     // nothing rather than by a garbage delta
     if (previous === null || tick < previous) return 0;
     return tick - previous;
+  }
+
+  // drawBallShadow marks where the ball is over the sand. on a flat court a
+  // still frame cannot say whether the ball is high or merely far away, and
+  // the shadow answers that: it spreads and fades as the ball climbs, so its
+  // darkest, tightest form is also a warning that the ball is about to land.
+  drawBallShadow(ball) {
+    const ctx = this.ctx;
+    const { groundY } = this.arena;
+
+    const height = Math.max(groundY - ball.pos.y, 0);
+    const closeness = Math.max(0, 1 - height / SHADOW_FADE_HEIGHT);
+
+    const spread = ball.radius * (1 + (1 - closeness) * 0.7);
+
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${(SHADOW_MAX_ALPHA * closeness).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(ball.pos.x, groundY + SHADOW_DROP, spread, spread * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   drawBall(ball, ticks) {
