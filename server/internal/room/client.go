@@ -161,7 +161,7 @@ func (c *Client) handleMessage(raw []byte) {
 		// dropped rather than queued if the room is busy: stale key state is
 		// worthless, the client resends it next frame anyway
 		select {
-		case c.room.inputs <- playerInput{playerID: c.playerID, keys: in.Keys}:
+		case c.room.inputs <- playerInput{playerID: c.playerID, seq: in.Seq, keys: in.Keys}:
 		default:
 		}
 

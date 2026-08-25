@@ -7,6 +7,7 @@ import { SnapshotBuffer } from './interpolate.js';
 import { Renderer } from './render.js';
 import { RoomBar } from './ui.js';
 import { LobbyPanel } from './lobby.js';
+import { Prediction } from './prediction.js';
 
 const canvas = document.getElementById('game');
 const input = new Input();
@@ -25,11 +26,17 @@ const view = {
 
 let renderer = null;
 let buffer = null;
+let prediction = null;
 
 const connection = new Connection({
   onStatus: (status) => {
     view.status = status;
-    if (status !== 'connected') roomBar.clearPing();
+    if (status !== 'connected') {
+      roomBar.clearPing();
+      // a reconnect is a new player as far as the server is concerned, so
+      // nothing predicted for the old one still applies
+      if (prediction) prediction.forget();
+    }
   },
 
   onPing: (rtt) => roomBar.showPing(rtt),
@@ -51,10 +58,19 @@ const connection = new Connection({
     // every reconnect would stack up another resize listener each time
     renderer ??= new Renderer(canvas, welcome.arena);
     buffer = new SnapshotBuffer(welcome.arena.tickRate);
+
+    // spectators have no player of their own to predict
+    prediction = welcome.spectator ? null : new Prediction(welcome.arena, welcome.tuning);
   },
 
   onSnapshot: (world) => {
     if (buffer) buffer.push(world);
+
+    // reconciled against the raw snapshot, not the interpolated one: this is
+    // what the server actually decided, while the interpolated world is a
+    // blend rendered deliberately in the past
+    const me = prediction && world.players[view.playerId];
+    if (me) prediction.reconcile(me);
   },
 });
 
@@ -69,12 +85,25 @@ function frame(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.25);
   lastFrame = now;
 
-  connection.sendInput(input.keys);
+  // one input per fixed tick, however fast this screen happens to redraw
+  if (prediction) {
+    for (const pending of prediction.advance(dt, input.keys)) {
+      connection.sendInput(pending);
+    }
+  }
 
   if (!renderer) return;
 
   const world = buffer.sample(dt);
-  if (world) lobby.update(world, view);
+  if (world) {
+    lobby.update(world, view);
+    // your own player comes from the prediction instead of the delayed
+    // snapshot, which is the whole point: it answers the keyboard now
+    const predicted = prediction && prediction.view();
+    if (predicted && world.players[view.playerId]) {
+      world.players[view.playerId] = { ...world.players[view.playerId], ...predicted };
+    }
+  }
   renderer.draw(world, view);
 }
 

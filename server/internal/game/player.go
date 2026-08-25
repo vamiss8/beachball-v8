@@ -2,8 +2,8 @@ package game
 
 import "math"
 
-// Player is one paddle-ish character. fields tagged "-" are simulation
-// internals the client has no business knowing about.
+// Player is one paddle-ish character. the fields without a json tag are
+// simulation internals no client needs.
 type Player struct {
 	ID   string `json:"id"`
 	Side Side   `json:"side"`
@@ -22,19 +22,15 @@ type Player struct {
 	IsJumping  bool `json:"isJumping"`
 	IsBlocking bool `json:"isBlocking"`
 
-	dashVelocity  float64
-	rotationVel   float64
-	canDoubleJump bool
-	dashesLeft    int
-	dashCooldown  int
-	prevJump      bool // edge detection, jump must be re-pressed every time
-	prevLeft      bool
-	prevRight     bool
+	// Motion carries the parts of the step that decide the next position but
+	// are invisible on their own. exported so a client can replay its own
+	// input from the same starting state; see the type for the reasoning
+	Motion Motion `json:"motion"`
 
-	// ticks since a walk key was last tapped, negative when no tap is
-	// waiting for its partner
-	tapLeft  int
-	tapRight int
+	// LastInputSeq is the sequence number of the last input applied here. the
+	// client reads it to tell which of its own inputs the server has already
+	// accounted for, and replays only the ones after it
+	LastInputSeq uint32 `json:"lastInputSeq"`
 
 	// whether the ball was already resting against this player last tick,
 	// so one long contact counts as a single hit
@@ -53,6 +49,14 @@ func NewPlayer(id string, side Side) *Player {
 // SetInput replaces the player's key state. called from the network layer.
 func (p *Player) SetInput(in Input) { p.input = in }
 
+// ApplyInput stores a key state along with the sequence number it arrived
+// under, so the snapshot can report how far this player's input has been
+// accounted for.
+func (p *Player) ApplyInput(seq uint32, in Input) {
+	p.input = in
+	p.LastInputSeq = seq
+}
+
 // SetName stores a name the client asked for, cleaned up first.
 func (p *Player) SetName(raw string) { p.Name = SanitizeName(raw) }
 
@@ -69,15 +73,15 @@ func (p *Player) Reset() {
 	p.VelocityX = 0
 	p.VelocityY = 0
 	p.Rotation = 0
-	p.dashVelocity = 0
-	p.rotationVel = 0
+	p.Motion.DashVelocity = 0
+	p.Motion.RotationVel = 0
 	p.IsJumping = false
 	p.IsBlocking = false
-	p.canDoubleJump = true
-	p.dashesLeft = DashesPerAirtime
-	p.dashCooldown = 0
-	p.tapLeft = -1
-	p.tapRight = -1
+	p.Motion.CanDoubleJump = true
+	p.Motion.DashesLeft = DashesPerAirtime
+	p.Motion.DashCooldown = 0
+	p.Motion.TapLeft = -1
+	p.Motion.TapRight = -1
 	p.touchingBall = false
 }
 
@@ -92,8 +96,8 @@ func (p *Player) step() {
 }
 
 func (p *Player) stepHorizontal() {
-	if p.dashCooldown > 0 {
-		p.dashCooldown--
+	if p.Motion.DashCooldown > 0 {
+		p.Motion.DashCooldown--
 	}
 
 	p.dashOnDoubleTap()
@@ -106,9 +110,9 @@ func (p *Player) stepHorizontal() {
 		walk = MoveSpeed
 	}
 
-	p.VelocityX = walk + p.dashVelocity
+	p.VelocityX = walk + p.Motion.DashVelocity
 	p.Pos.X += p.VelocityX
-	p.dashVelocity *= DashFriction
+	p.Motion.DashVelocity *= DashFriction
 
 	p.clampToOwnHalf()
 }
@@ -117,31 +121,31 @@ func (p *Player) stepHorizontal() {
 // window. the detection sits here rather than in the client because the
 // client only ever reports which keys are down, never what that means.
 func (p *Player) dashOnDoubleTap() {
-	pressedLeft := p.input.Left && !p.prevLeft
-	pressedRight := p.input.Right && !p.prevRight
-	p.prevLeft, p.prevRight = p.input.Left, p.input.Right
+	pressedLeft := p.input.Left && !p.Motion.PrevLeft
+	pressedRight := p.input.Right && !p.Motion.PrevRight
+	p.Motion.PrevLeft, p.Motion.PrevRight = p.input.Left, p.input.Right
 
 	// age the pending taps before this tick's presses, so a press lands on
 	// zero and the window counts from the tick after it
-	p.tapLeft = agePendingTap(p.tapLeft)
-	p.tapRight = agePendingTap(p.tapRight)
+	p.Motion.TapLeft = agePendingTap(p.Motion.TapLeft)
+	p.Motion.TapRight = agePendingTap(p.Motion.TapRight)
 
 	if pressedLeft {
-		if p.tapLeft >= 0 {
+		if p.Motion.TapLeft >= 0 {
 			p.startDash(-1)
 			// the pair is spent, otherwise holding a rhythm keeps dashing
-			p.tapLeft = -1
+			p.Motion.TapLeft = -1
 		} else {
-			p.tapLeft = 0
+			p.Motion.TapLeft = 0
 		}
 	}
 
 	if pressedRight {
-		if p.tapRight >= 0 {
+		if p.Motion.TapRight >= 0 {
 			p.startDash(1)
-			p.tapRight = -1
+			p.Motion.TapRight = -1
 		} else {
-			p.tapRight = 0
+			p.Motion.TapRight = 0
 		}
 	}
 }
@@ -162,14 +166,14 @@ func agePendingTap(age int) int {
 // have a dash left and the cooldown has expired. a dash is an instant impulse
 // that decays, so it stacks on top of the walk speed instead of replacing it.
 func (p *Player) startDash(dir float64) {
-	if p.dashesLeft <= 0 || p.dashCooldown > 0 {
+	if p.Motion.DashesLeft <= 0 || p.Motion.DashCooldown > 0 {
 		return
 	}
 
-	p.dashVelocity = dir * DashVelocity
-	p.rotationVel = dir * DashSpin
-	p.dashesLeft--
-	p.dashCooldown = DashCooldownTicks
+	p.Motion.DashVelocity = dir * DashVelocity
+	p.Motion.RotationVel = dir * DashSpin
+	p.Motion.DashesLeft--
+	p.Motion.DashCooldown = DashCooldownTicks
 }
 
 // clampToOwnHalf keeps a player inside the arena and on their side of the net.
@@ -191,23 +195,23 @@ func (p *Player) clampToOwnHalf() {
 
 func (p *Player) stepVertical() {
 	// jump triggers on the rising edge only, while holding the key does nothing
-	justPressed := p.input.Jump && !p.prevJump
-	p.prevJump = p.input.Jump
+	justPressed := p.input.Jump && !p.Motion.PrevJump
+	p.Motion.PrevJump = p.input.Jump
 
 	if justPressed {
 		switch {
 		case !p.IsJumping:
 			p.VelocityY = JumpVelocity
 			p.IsJumping = true
-			p.canDoubleJump = true
-		case p.canDoubleJump:
+			p.Motion.CanDoubleJump = true
+		case p.Motion.CanDoubleJump:
 			p.VelocityY = DoubleJumpVelocity
-			p.canDoubleJump = false
+			p.Motion.CanDoubleJump = false
 			// double jump spins the player inward, which arms the smash
 			if p.Side == SideLeft {
-				p.rotationVel = DoubleJumpSpin
+				p.Motion.RotationVel = DoubleJumpSpin
 			} else {
-				p.rotationVel = -DoubleJumpSpin
+				p.Motion.RotationVel = -DoubleJumpSpin
 			}
 		}
 	}
@@ -225,11 +229,11 @@ func (p *Player) stepVertical() {
 		p.Pos.Y = groundLevel()
 		p.VelocityY = 0
 		p.Rotation = 0
-		p.rotationVel = 0
+		p.Motion.RotationVel = 0
 		p.IsJumping = false
 		p.IsBlocking = false
-		p.canDoubleJump = true
-		p.dashesLeft = DashesPerAirtime
+		p.Motion.CanDoubleJump = true
+		p.Motion.DashesLeft = DashesPerAirtime
 	}
 }
 
@@ -242,13 +246,13 @@ func (p *Player) stepRotation() {
 		} else {
 			p.Rotation = -BlockAngle
 		}
-		p.rotationVel = 0
-	case p.rotationVel != 0:
-		p.Rotation += p.rotationVel
+		p.Motion.RotationVel = 0
+	case p.Motion.RotationVel != 0:
+		p.Rotation += p.Motion.RotationVel
 		// one full turn, then settle upright
 		if math.Abs(p.Rotation) >= 2*math.Pi {
 			p.Rotation = 0
-			p.rotationVel = 0
+			p.Motion.RotationVel = 0
 		}
 	default:
 		p.Rotation = 0
@@ -257,4 +261,4 @@ func (p *Player) stepRotation() {
 
 // isSmashing reports whether the player is mid-spin, which turns a normal
 // bump into a smash.
-func (p *Player) isSmashing() bool { return p.rotationVel != 0 }
+func (p *Player) isSmashing() bool { return p.Motion.RotationVel != 0 }

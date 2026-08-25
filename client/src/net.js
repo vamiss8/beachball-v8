@@ -53,7 +53,6 @@ export class Connection {
     this.socket = null;
     this.reconnectTimer = null;
     this.reconnectDelay = RECONNECT_DELAY_MS;
-    this.lastSentKeys = null;
     this.lastSentLobby = null;
     this.lastLobby = null;
 
@@ -70,9 +69,6 @@ export class Connection {
     socket.addEventListener('open', () => {
       this.onStatus('connected');
       this.reconnectDelay = RECONNECT_DELAY_MS;
-      // the server keeps the last input it received, so a fresh connection
-      // must resend the current key state instead of waiting for a change
-      this.lastSentKeys = null;
       this.resendLobby();
       this.startPinging();
     });
@@ -162,17 +158,17 @@ export class Connection {
     }
   }
 
-  // sendInput only writes when something actually changed: the server holds
-  // the last key state until told otherwise, so resending it every frame
-  // would be 60 pointless messages per second
-  sendInput(keys) {
+  // sendInput writes one numbered input per simulated tick.
+  //
+  // it used to send only on a change, which was cheaper but left the server
+  // holding the same keys for however many ticks passed in between. a client
+  // replaying its own movement cannot know how many that was, so prediction
+  // needs one input per tick instead: the server consumes exactly one per
+  // tick, and both sides then apply the same keys for the same duration
+  sendInput(input) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
-    const encoded = JSON.stringify(keys);
-    if (encoded === this.lastSentKeys) return;
-    this.lastSentKeys = encoded;
-
-    this.socket.send(JSON.stringify({ type: 'input', data: { keys } }));
+    this.socket.send(JSON.stringify({ type: 'input', data: input }));
   }
 
   // sendLobby reports the name and readiness. also deduplicated, since typing

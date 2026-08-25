@@ -17,6 +17,12 @@ import (
 // to be decided in one place.
 const MaxPlayers = game.PlayersPerMatch
 
+// maxPendingInputs bounds the per-player input queue. a client that sends
+// faster than we tick, or one whose packets arrive in a burst after a stall,
+// must not be able to build a backlog the simulation then works through in
+// slow motion. the oldest keys are the first to go: they are the stalest.
+const maxPendingInputs = 8
+
 // EmptyRoomTTL is how long a room waits alone before closing. the grace
 // period is what lets someone reload the page, or arrive a moment before
 // their opponent, without the match evaporating.
@@ -25,6 +31,7 @@ const EmptyRoomTTL = 60 * time.Second
 // playerInput carries a client's key state into the room goroutine.
 type playerInput struct {
 	playerID string
+	seq      uint32
 	keys     game.Input
 }
 
@@ -50,6 +57,11 @@ type Room struct {
 	lobby      chan lobbyUpdate
 	quit       chan struct{}
 
+	// inputs waiting for a tick, one queue per player. exactly one is
+	// consumed per tick, so an input covers the same number of ticks here as
+	// it does in the client predicting the same movement
+	pending map[string][]playerInput
+
 	nextPlayerID uint64
 
 	// when the last client left, zero while anyone is still here
@@ -73,6 +85,7 @@ func newRoom(id string, onEmpty func(string)) *Room {
 		inputs:     make(chan playerInput, 64),
 		lobby:      make(chan lobbyUpdate, 8),
 		quit:       make(chan struct{}),
+		pending:    make(map[string][]playerInput),
 		onEmpty:    onEmpty,
 	}
 	go r.run()
@@ -102,9 +115,7 @@ func (r *Room) run() {
 			r.remove(c)
 
 		case in := <-r.inputs:
-			if p, ok := r.world.Players[in.playerID]; ok {
-				p.SetInput(in.keys)
-			}
+			r.queueInput(in)
 
 		case up := <-r.lobby:
 			if p, ok := r.world.Players[up.playerID]; ok {
@@ -124,9 +135,42 @@ func (r *Room) run() {
 			}
 			r.emptySince = time.Time{}
 
+			r.applyQueuedInputs()
 			r.world.Step()
 			r.broadcastState()
 		}
+	}
+}
+
+// queueInput parks a client's keys until the next tick claims them.
+func (r *Room) queueInput(in playerInput) {
+	q := append(r.pending[in.playerID], in)
+	if len(q) > maxPendingInputs {
+		q = q[len(q)-maxPendingInputs:]
+	}
+	r.pending[in.playerID] = q
+}
+
+// applyQueuedInputs hands each player exactly one queued input.
+//
+// a player whose queue has run dry keeps the keys they last sent, which is
+// what happens when a packet goes missing. the client cannot tell that from a
+// delivered one, so its replay will be a tick out until the next snapshot
+// pulls it back.
+func (r *Room) applyQueuedInputs() {
+	for id, q := range r.pending {
+		p, ok := r.world.Players[id]
+		if !ok {
+			// the player left; their queue has nothing left to drive
+			delete(r.pending, id)
+			continue
+		}
+		if len(q) == 0 {
+			continue
+		}
+
+		p.ApplyInput(q[0].seq, q[0].keys)
+		r.pending[id] = q[1:]
 	}
 }
 
@@ -169,6 +213,7 @@ func (r *Room) add(c *Client) {
 		Spectator: c.spectator,
 		RoomID:    r.ID,
 		Arena:     protocol.CurrentArena(),
+		Tuning:    protocol.CurrentTuning(),
 	})
 	if err != nil {
 		log.Printf("room %s: encode welcome: %v", r.ID, err)
@@ -189,6 +234,7 @@ func (r *Room) remove(c *Client) {
 
 	if c.playerID != "" {
 		r.world.RemovePlayer(c.playerID)
+		delete(r.pending, c.playerID)
 	}
 	log.Printf("room %s: %s left", r.ID, c.describe())
 }

@@ -45,6 +45,53 @@ type Arena struct {
 	TickRate    int `json:"tickRate"`
 }
 
+// Tuning is every constant a client needs to reproduce the server's own
+// player step, tick for tick.
+//
+// they are sent rather than written down on both sides, so there is still one
+// place where these numbers are decided. a client that hardcoded them would
+// keep predicting with last week's jump height the moment one was changed.
+type Tuning struct {
+	MoveSpeed          float64 `json:"moveSpeed"`
+	JumpVelocity       float64 `json:"jumpVelocity"`
+	DoubleJumpVelocity float64 `json:"doubleJumpVelocity"`
+	Gravity            float64 `json:"gravity"`
+	BlockGravity       float64 `json:"blockGravity"`
+
+	DashVelocity      float64 `json:"dashVelocity"`
+	DashFriction      float64 `json:"dashFriction"`
+	DashCooldownTicks int     `json:"dashCooldownTicks"`
+	DashesPerAirtime  int     `json:"dashesPerAirtime"`
+
+	DoubleTapWindowTicks int `json:"doubleTapWindowTicks"`
+
+	DashSpin       float64 `json:"dashSpin"`
+	DoubleJumpSpin float64 `json:"doubleJumpSpin"`
+	BlockAngle     float64 `json:"blockAngle"`
+
+	NetGap float64 `json:"netGap"`
+}
+
+// CurrentTuning reports the constants the simulation is actually using.
+func CurrentTuning() Tuning {
+	return Tuning{
+		MoveSpeed:            game.MoveSpeed,
+		JumpVelocity:         game.JumpVelocity,
+		DoubleJumpVelocity:   game.DoubleJumpVelocity,
+		Gravity:              game.Gravity,
+		BlockGravity:         game.BlockGravity,
+		DashVelocity:         game.DashVelocity,
+		DashFriction:         game.DashFriction,
+		DashCooldownTicks:    game.DashCooldownTicks,
+		DashesPerAirtime:     game.DashesPerAirtime,
+		DoubleTapWindowTicks: game.DoubleTapWindowTicks,
+		DashSpin:             game.DashSpin,
+		DoubleJumpSpin:       game.DoubleJumpSpin,
+		BlockAngle:           game.BlockAngle,
+		NetGap:               game.NetGap,
+	}
+}
+
 // CurrentArena reports the arena the server is actually simulating.
 func CurrentArena() Arena {
 	return Arena{
@@ -70,6 +117,7 @@ type Welcome struct {
 	Spectator bool      `json:"spectator"`
 	RoomID    string    `json:"roomId"`
 	Arena     Arena     `json:"arena"`
+	Tuning    Tuning    `json:"tuning"`
 }
 
 // State is a full snapshot of the world, sent every broadcast tick.
@@ -78,7 +126,13 @@ type State struct {
 }
 
 // Input carries the key state, sent whenever it changes.
+//
+// Seq numbers each input a client sends. the server echoes the last one it
+// applied back in the snapshot, which is how a client predicting its own
+// movement knows which of its inputs are already accounted for and which it
+// still has to replay on top of the authoritative state.
 type Input struct {
+	Seq  uint32     `json:"seq"`
 	Keys game.Input `json:"keys"`
 }
 
