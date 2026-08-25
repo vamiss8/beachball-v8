@@ -17,8 +17,10 @@ The idea is simple. You open a link, send it to a friend, you play.
 
 ## How it works
 
-All the physics runs on the server. The client doesn't simulate anything — it
-sends which keys are held down and draws whatever comes back.
+The server decides everything. The client sends which keys are held down and
+draws what comes back, with one deliberate exception: it also predicts its own
+player, so the controls answer the keyboard without waiting for a round trip.
+Every snapshot overrules that prediction.
 
 ```
 browser                          server (Go)
@@ -36,10 +38,9 @@ straight from the console. So I rewrote it in Go. The volleyball here is
 arcade-y: the entire physics is gravity plus circle-versus-rectangle collision,
 and a full engine is overkill for that. There's no decent p2 port for Go anyway.
 
-The price is input lag. The client hides part of it by rendering a fraction of
-a second in the past and interpolating between snapshots, so movement is smooth
-even when packets arrive unevenly. Your own player still waits for the server,
-which is the next thing to fix.
+The price is input lag, paid in two places. Other players are drawn a fraction
+of a second in the past, interpolated between snapshots, so they move smoothly
+even when packets arrive unevenly. Your own player is not: see below.
 
 ## Server packages
 
@@ -51,6 +52,7 @@ server/
     │   ├── config.go    every physics tunable in one place
     │   ├── types.go     Vec2, Side, Phase, Input
     │   ├── name.go      cleaning up player-supplied names
+    │   ├── motion.go    the invisible half of a player's state
     │   ├── player.go    movement, jump, dash, block, spin
     │   ├── ball.go      gravity, integration, walls
     │   └── world.go     simulation step, collisions, scoring, rally phases
@@ -199,6 +201,43 @@ Names are cut to 16 characters and stripped of control characters server-side.
 It is the only free text one player can put on another's screen, so none of it
 is taken on trust.
 
+## Predicting your own player
+
+Waiting for the server before your own player moves is what made the controls
+feel soft: every key press cost a full round trip before anything happened on
+screen. So the client runs the server's player step itself, for its own player
+only, and draws the result immediately.
+
+The server still decides. Each snapshot carries the last input it applied to
+you, the client throws away everything already accounted for, and replays only
+what is left on top of the authoritative state. A disagreement smaller than a
+player's width is absorbed by sliding the drawn position back over a few
+frames; anything larger is a real disagreement and is shown as it is.
+
+Two things make that replay line up:
+
+- **One input per tick.** The client used to send only on a change, which was
+  cheaper but left the server holding the same keys for however many ticks
+  passed in between — a number the client could not know. Now it sends one
+  numbered input per simulated tick and the server consumes exactly one per
+  tick, so the same keys cover the same ticks on both sides. That also means
+  the client steps its prediction on a fixed clock, or a 144hz screen would
+  predict more than twice the ticks the server ran.
+- **The numbers come from the server.** Speeds, gravity, dash strength and the
+  double-tap window arrive with the welcome message instead of being written
+  down twice. A client with its own copy would keep predicting with last
+  week's jump height the moment one changed.
+
+The client also needs the parts of a player that never appear on screen —
+whether a dash is spent, whether the double jump is armed, how long ago a walk
+key was tapped — so those travel in the snapshot as well. It is the one real
+cost: the same data about your opponent is sent too, since everyone gets the
+same snapshot. None of it is secret, it is all visible in how they move.
+
+The javascript step is a hand-written copy of `player.go` and has to stay one.
+I checked it by running the same input script through both and comparing every
+field on every tick; they agreed on all 83 ticks, dash decay included.
+
 ## Rules
 
 Before a serve the ball hangs in the air for a second so both players can get
@@ -227,8 +266,10 @@ winner serves. First to 15.
 
 ## Как устроено
 
-Вся физика считается на сервере. Клиент не симулирует ничего: шлёт, какие
-клавиши зажаты, и рисует то, что пришло в ответ.
+Всё решает сервер. Клиент шлёт, какие клавиши зажаты, и рисует то, что пришло
+в ответ, — с одним осознанным исключением: своего игрока он ещё и предсказывает,
+чтобы управление отвечало на клавиши, не дожидаясь круга до сервера. Любой
+снапшот это предсказание перебивает.
 
 ```
 браузер                          сервер (Go)
@@ -246,10 +287,9 @@ winner serves. First to 15.
 это гравитация и столкновение круга с прямоугольником, полноценный движок для
 такого избыточен. Плюс нормального порта p2 под Go всё равно нет.
 
-Платим за это задержкой ввода. Часть её клиент прячет: рисует на доли секунды в
-прошлом и интерполирует между снапшотами, поэтому движение плавное даже когда
-пакеты приходят неровно. Свой игрок всё ещё ждёт сервер — это следующее, что
-нужно чинить.
+Платим за это задержкой ввода, и платим в двух местах. Чужие игроки рисуются на
+доли секунды в прошлом, с интерполяцией между снапшотами, поэтому движутся
+плавно даже когда пакеты приходят неровно. Свой игрок — нет, см. ниже.
 
 ## Пакеты сервера
 
@@ -409,6 +449,43 @@ websocket есть свои ping-фреймы, но браузер отвеча�
 Имя режется до 16 символов и чистится от управляющих на сервере. Это
 единственный свободный текст, который один игрок может показать другому, так что
 на слово ему не верят.
+
+## Предсказание своего игрока
+
+Именно ожидание сервера делало управление ватным: каждое нажатие стоило
+полного круга до сервера, прежде чем на экране что-то происходило. Поэтому
+клиент сам прогоняет серверный шаг игрока — только для своего — и сразу рисует
+результат.
+
+Решает по-прежнему сервер. В каждом снапшоте приезжает номер последнего
+применённого к тебе ввода, клиент выбрасывает всё уже учтённое и переигрывает
+поверх авторитетного состояния только остаток. Расхождение меньше ширины игрока
+всасывается: нарисованная позиция подъезжает к правильной за несколько кадров.
+Всё, что больше, — настоящее расхождение, и оно показывается как есть.
+
+Чтобы переигрывание сходилось, нужны две вещи:
+
+- **Один ввод на тик.** Раньше клиент слал только при изменении — дешевле, но
+  сервер держал те же клавиши неизвестное клиенту число тиков. Теперь на каждый
+  симулированный тик уходит один пронумерованный ввод, а сервер съедает ровно
+  один за тик, так что одни и те же клавиши покрывают одинаковое число тиков с
+  обеих сторон. Отсюда же фиксированный шаг на клиенте: иначе экран на 144 Гц
+  предсказал бы вдвое больше тиков, чем сервер отсимулировал.
+- **Числа приезжают с сервера.** Скорости, гравитация, сила рывка и окно
+  двойного нажатия приходят в welcome, а не записаны в двух местах. Клиент со
+  своей копией продолжил бы предсказывать прошлогодней высотой прыжка, стоило
+  бы её поменять.
+
+Клиенту нужна ещё и та часть состояния игрока, которой не видно на экране:
+потрачен ли рывок, взведён ли двойной прыжок, давно ли нажимали клавишу ходьбы.
+Она тоже едет в снапшоте. Это единственная реальная цена: те же данные о
+сопернике уходят всем, потому что снапшот общий. Секретного там ничего нет —
+всё это и так видно по тому, как он двигается.
+
+Шаг на javascript — рукописная копия `player.go`, и обязан ею оставаться. Я
+проверил его, прогнав один и тот же сценарий ввода через обе реализации и
+сравнив каждое поле на каждом тике: сошлись все 83 тика, включая затухание
+рывка.
 
 ## Правила
 
