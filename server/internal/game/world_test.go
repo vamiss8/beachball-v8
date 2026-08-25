@@ -171,7 +171,7 @@ func TestPlayerLandsAndRegainsAbilities(t *testing.T) {
 
 	// holding jump must not re-trigger, the edge is already consumed
 	stepN(w, 2)
-	if !p.canDoubleJump {
+	if !p.Motion.CanDoubleJump {
 		t.Fatal("double jump should still be available while holding the key")
 	}
 
@@ -181,8 +181,8 @@ func TestPlayerLandsAndRegainsAbilities(t *testing.T) {
 	if p.IsJumping {
 		t.Fatal("player never landed")
 	}
-	if p.dashesLeft != DashesPerAirtime {
-		t.Fatalf("dashes after landing = %d, want %d", p.dashesLeft, DashesPerAirtime)
+	if p.Motion.DashesLeft != DashesPerAirtime {
+		t.Fatalf("dashes after landing = %d, want %d", p.Motion.DashesLeft, DashesPerAirtime)
 	}
 }
 
@@ -204,7 +204,7 @@ func TestDoubleTapDashes(t *testing.T) {
 	}
 	// landing refills the dash count every tick, so the cooldown is what
 	// actually proves a dash was spent while standing on the sand
-	if p.dashCooldown == 0 {
+	if p.Motion.DashCooldown == 0 {
 		t.Fatal("dash cooldown was not armed")
 	}
 }
@@ -224,8 +224,8 @@ func TestSecondTapAfterTheWindowDoesNotDash(t *testing.T) {
 	if p.VelocityX > MoveSpeed {
 		t.Fatalf("a late second tap dashed: velocityX = %v", p.VelocityX)
 	}
-	if p.dashCooldown != 0 {
-		t.Fatalf("dash cooldown = %d, want 0: no dash should have fired", p.dashCooldown)
+	if p.Motion.DashCooldown != 0 {
+		t.Fatalf("dash cooldown = %d, want 0: no dash should have fired", p.Motion.DashCooldown)
 	}
 }
 
