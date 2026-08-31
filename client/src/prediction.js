@@ -7,7 +7,7 @@
 
 import { clonePlayerState, stepPlayer } from './predict.js';
 
-// a correction smaller than this is hidden by sliding the drawn position back
+// correction smaller than this is hidden by sliding the drawn position back
 // over a few frames. anything larger is a real disagreement — a lost input,
 // or a rejoin — and pretending otherwise would drag the player across the
 // court instead of putting them where the server says they are
