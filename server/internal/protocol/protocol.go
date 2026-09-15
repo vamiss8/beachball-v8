@@ -3,6 +3,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"beachball-v8/server/internal/game"
@@ -139,6 +140,39 @@ type State struct {
 type Input struct {
 	Seq  uint32     `json:"seq"`
 	Keys game.Input `json:"keys"`
+}
+
+// inputPrefix is how the game's own client begins every input it sends
+var inputPrefix = []byte(`{"type":"input",`)
+
+// DecodeInput is the fast path for the message every player sends on every
+// tick. when raw begins the way the game's own client writes an input, it is
+// decoded in a single pass straight into an Input.
+//
+// the general route decodes an Envelope, copying its data out as raw bytes,
+// and then decodes those bytes a second time. under load that was the second
+// largest cost the server had after writing to sockets, all of it spent on
+// the one message that outnumbers every other kind put together.
+//
+// ok is false for anything that does not take this path, including a well
+// formed input with its keys in another order, and the caller then falls back
+// to the Envelope. such a client is slower, never misread.
+func DecodeInput(raw []byte) (Input, bool) {
+	if !bytes.HasPrefix(raw, inputPrefix) {
+		return Input{}, false
+	}
+
+	var msg struct {
+		Type string `json:"type"`
+		Data Input  `json:"data"`
+	}
+	// the type is checked again after decoding: json keeps the last of a
+	// duplicated key, so a message that opens like an input can still claim
+	// to be something else further in
+	if err := json.Unmarshal(raw, &msg); err != nil || msg.Type != TypeInput {
+		return Input{}, false
+	}
+	return msg.Data, true
 }
 
 // Lobby is what a player sends from the pre-match screen: the name they want

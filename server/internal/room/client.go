@@ -135,6 +135,16 @@ func (c *Client) readPump() {
 // handleMessage decodes one client message. every failure path here is a
 // no-op on purpose: malformed input must never take the server down.
 func (c *Client) handleMessage(raw []byte) {
+	// inputs arrive every tick from every player and take a single decoding
+	// pass; everything else, and any input written differently, goes the
+	// general way below
+	if in, ok := protocol.DecodeInput(raw); ok {
+		if !c.spectator {
+			c.forwardInput(in)
+		}
+		return
+	}
+
 	var env protocol.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return
@@ -158,12 +168,7 @@ func (c *Client) handleMessage(raw []byte) {
 		if err := json.Unmarshal(env.Data, &in); err != nil {
 			return
 		}
-		// dropped rather than queued if the room is busy: stale key state is
-		// worthless, the client resends it next frame anyway
-		select {
-		case c.room.inputs <- playerInput{playerID: c.playerID, seq: in.Seq, keys: in.Keys}:
-		default:
-		}
+		c.forwardInput(in)
 
 	case protocol.TypeLobby:
 		var lb protocol.Lobby
@@ -177,6 +182,21 @@ func (c *Client) handleMessage(raw []byte) {
 		case c.room.lobby <- lobbyUpdate{playerID: c.playerID, name: lb.Name, ready: lb.Ready}:
 		case <-c.room.quit:
 		}
+	}
+}
+
+// forwardInput hands an input to the room without ever blocking the reader.
+//
+// dropped rather than waited on when the room's channel is full, which only
+// happens if the room goroutine itself has stalled. a dropped input is not
+// resent, since every tick has its own: the server keeps the keys it last
+// applied for that tick, and the client's prediction is corrected by the
+// next snapshot. that beats a reader stuck behind a stalled room, which would
+// stop answering pings and stop noticing the connection close.
+func (c *Client) forwardInput(in protocol.Input) {
+	select {
+	case c.room.inputs <- playerInput{playerID: c.playerID, seq: in.Seq, keys: in.Keys}:
+	default:
 	}
 }
 
