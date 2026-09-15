@@ -137,7 +137,9 @@ func (r *Room) run() {
 
 			r.applyQueuedInputs()
 			r.world.Step()
-			r.broadcastState()
+			if r.world.Tick%game.SnapshotEveryTicks == 0 {
+				r.broadcastState()
+			}
 		}
 	}
 }

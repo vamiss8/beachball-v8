@@ -5,9 +5,10 @@
 // the client deliberately renders slightly in the past and blends between the
 // two snapshots surrounding that moment.
 
-// how far behind the newest snapshot we render. one hundred milliseconds is
-// enough to ride out normal jitter and a couple of dropped frames, and small
-// enough that the input lag stays unnoticeable
+// how far behind the newest snapshot we render. snapshots arrive every second
+// tick, so six ticks is three of them: enough to ride out normal jitter and a
+// whole lost snapshot. your own player is predicted rather than drawn from
+// here, so this delay only ever applies to the ball and the other side
 const DELAY_TICKS = 6;
 
 // snapshots older than this are useless, keep the buffer bounded

@@ -43,6 +43,10 @@ type Arena struct {
 
 	PointsToWin int `json:"pointsToWin"`
 	TickRate    int `json:"tickRate"`
+	// how many snapshots a second actually arrive. lower than the tick rate,
+	// see game.SnapshotEveryTicks; a client only needs it to know what an on
+	// time snapshot looks like
+	SnapshotRate int `json:"snapshotRate"`
 }
 
 // Tuning is every constant a client needs to reproduce the server's own
@@ -106,6 +110,7 @@ func CurrentArena() Arena {
 		PlayerHeight: game.PlayerHeight,
 		PointsToWin:  game.PointsToWin,
 		TickRate:     game.TickRate,
+		SnapshotRate: game.SnapshotRate,
 	}
 }
 
@@ -120,7 +125,7 @@ type Welcome struct {
 	Tuning    Tuning    `json:"tuning"`
 }
 
-// State is a full snapshot of the world, sent every broadcast tick.
+// State is a full snapshot of the world, sent every game.SnapshotEveryTicks ticks.
 type State struct {
 	World *game.World `json:"world"`
 }
