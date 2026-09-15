@@ -76,3 +76,36 @@ func TestQueueIsDroppedWhenThePlayerLeaves(t *testing.T) {
 		t.Fatal("a departed player's queue was left behind")
 	}
 }
+
+func TestEveryInputSpellingReachesTheRoom(t *testing.T) {
+	r := &Room{inputs: make(chan playerInput, 4)}
+	c := &Client{room: r, playerID: "p"}
+
+	// as the game's own client writes it, taking the fast path
+	c.handleMessage([]byte(`{"type":"input","data":{"seq":1,"keys":{"right":true}}}`))
+	// the same thing with its keys reordered, which has to fall back
+	c.handleMessage([]byte(`{"data":{"seq":2,"keys":{"left":true}},"type":"input"}`))
+
+	for _, want := range []uint32{1, 2} {
+		select {
+		case in := <-r.inputs:
+			if in.seq != want {
+				t.Fatalf("seq = %d, want %d", in.seq, want)
+			}
+		default:
+			t.Fatalf("input %d never reached the room", want)
+		}
+	}
+}
+
+func TestSpectatorInputIsIgnoredOnBothPaths(t *testing.T) {
+	r := &Room{inputs: make(chan playerInput, 4)}
+	c := &Client{room: r, spectator: true}
+
+	c.handleMessage([]byte(`{"type":"input","data":{"seq":1,"keys":{"right":true}}}`))
+	c.handleMessage([]byte(`{"data":{"seq":2,"keys":{}},"type":"input"}`))
+
+	if n := len(r.inputs); n != 0 {
+		t.Fatalf("%d spectator inputs reached the room, want none", n)
+	}
+}

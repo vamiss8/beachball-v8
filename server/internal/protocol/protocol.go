@@ -3,6 +3,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"beachball-v8/server/internal/game"
@@ -43,6 +44,10 @@ type Arena struct {
 
 	PointsToWin int `json:"pointsToWin"`
 	TickRate    int `json:"tickRate"`
+	// how many snapshots a second actually arrive. lower than the tick rate,
+	// see game.SnapshotEveryTicks; a client only needs it to know what an on
+	// time snapshot looks like
+	SnapshotRate int `json:"snapshotRate"`
 }
 
 // Tuning is every constant a client needs to reproduce the server's own
@@ -106,6 +111,7 @@ func CurrentArena() Arena {
 		PlayerHeight: game.PlayerHeight,
 		PointsToWin:  game.PointsToWin,
 		TickRate:     game.TickRate,
+		SnapshotRate: game.SnapshotRate,
 	}
 }
 
@@ -120,7 +126,7 @@ type Welcome struct {
 	Tuning    Tuning    `json:"tuning"`
 }
 
-// State is a full snapshot of the world, sent every broadcast tick.
+// State is a full snapshot of the world, sent every game.SnapshotEveryTicks ticks.
 type State struct {
 	World *game.World `json:"world"`
 }
@@ -134,6 +140,39 @@ type State struct {
 type Input struct {
 	Seq  uint32     `json:"seq"`
 	Keys game.Input `json:"keys"`
+}
+
+// inputPrefix is how the game's own client begins every input it sends
+var inputPrefix = []byte(`{"type":"input",`)
+
+// DecodeInput is the fast path for the message every player sends on every
+// tick. when raw begins the way the game's own client writes an input, it is
+// decoded in a single pass straight into an Input.
+//
+// the general route decodes an Envelope, copying its data out as raw bytes,
+// and then decodes those bytes a second time. under load that was the second
+// largest cost the server had after writing to sockets, all of it spent on
+// the one message that outnumbers every other kind put together.
+//
+// ok is false for anything that does not take this path, including a well
+// formed input with its keys in another order, and the caller then falls back
+// to the Envelope. such a client is slower, never misread.
+func DecodeInput(raw []byte) (Input, bool) {
+	if !bytes.HasPrefix(raw, inputPrefix) {
+		return Input{}, false
+	}
+
+	var msg struct {
+		Type string `json:"type"`
+		Data Input  `json:"data"`
+	}
+	// the type is checked again after decoding: json keeps the last of a
+	// duplicated key, so a message that opens like an input can still claim
+	// to be something else further in
+	if err := json.Unmarshal(raw, &msg); err != nil || msg.Type != TypeInput {
+		return Input{}, false
+	}
+	return msg.Data, true
 }
 
 // Lobby is what a player sends from the pre-match screen: the name they want
@@ -153,11 +192,22 @@ type Lobby struct {
 // handled by the browser itself and never surface in javascript, so a client
 // has no way to time them.
 
-// Encode wraps a payload in an envelope and marshals it.
+// Encode wraps a payload in an envelope and marshals both in a single pass.
+//
+// it used to marshal the payload first and then marshal an Envelope holding
+// those bytes. encoding/json does not pass a json.RawMessage through as it is:
+// it re-validates and compacts every byte. with a snapshot going out for every
+// room on every tick, that second pass over bytes the server had written a
+// moment earlier was about a tenth of all its cpu under load.
 func Encode(msgType string, payload any) ([]byte, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(Envelope{Type: msgType, Data: data})
+	return json.Marshal(outgoing{Type: msgType, Data: payload})
+}
+
+// outgoing is the envelope as the server writes it. it differs from Envelope,
+// which is the reading side, only in holding the payload as a value to be
+// encoded rather than as bytes already encoded. the field order is part of the
+// wire format: type comes first, so a reader can dispatch on the leading bytes.
+type outgoing struct {
+	Type string `json:"type"`
+	Data any    `json:"data,omitempty"`
 }

@@ -6,14 +6,19 @@ import (
 	"sync"
 )
 
-// MaxRooms caps how many matches exist at once. without it, anyone could open
-// endless codes and the server would happily allocate a simulation for each.
-const MaxRooms = 500
+// DefaultMaxRooms caps how many matches exist at once when nothing else is
+// configured. without a cap, anyone could open endless codes and the server
+// would happily allocate a simulation for each.
+//
+// it is a default and not a law: the right number depends on the machine, and
+// a load test found this one turning players away while the server it was
+// protecting sat nearly idle. deployments set their own through NewManager.
+const DefaultMaxRooms = 500
 
 var (
 	// ErrBadCode means the code could never have been issued by this server.
 	ErrBadCode = errors.New("invalid room code")
-	// ErrTooManyRooms means the server is already at MaxRooms.
+	// ErrTooManyRooms means the server is already at its room cap.
 	ErrTooManyRooms = errors.New("too many rooms")
 )
 
@@ -23,13 +28,19 @@ var (
 // stay lock-free because each one is driven by its own goroutine; the map of
 // rooms is not game state, so guarding it with a mutex is fine.
 type Manager struct {
-	mu    sync.Mutex
-	rooms map[string]*Room
+	mu       sync.Mutex
+	rooms    map[string]*Room
+	maxRooms int
 }
 
-// NewManager returns an empty manager.
-func NewManager() *Manager {
-	return &Manager{rooms: make(map[string]*Room)}
+// NewManager returns an empty manager that holds at most maxRooms rooms. zero
+// or less means DefaultMaxRooms, so a caller that has no opinion cannot switch
+// the cap off by accident.
+func NewManager(maxRooms int) *Manager {
+	if maxRooms <= 0 {
+		maxRooms = DefaultMaxRooms
+	}
+	return &Manager{rooms: make(map[string]*Room), maxRooms: maxRooms}
 }
 
 // Join resolves a room code to a room, opening it if nobody has yet. an empty
@@ -98,7 +109,7 @@ func (m *Manager) open() (*Room, error) {
 
 // insert starts a room and registers it. the caller must hold the lock.
 func (m *Manager) insert(code string) (*Room, error) {
-	if len(m.rooms) >= MaxRooms {
+	if len(m.rooms) >= m.maxRooms {
 		return nil, ErrTooManyRooms
 	}
 

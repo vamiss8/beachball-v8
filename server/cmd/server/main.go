@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,8 +22,10 @@ import (
 )
 
 // devOrigin is the vite dev server, allowed by default so `npm run dev` works
-// against a locally running server without any extra configuration.
-const devOrigin = "http://localhost:5173"
+// against a locally running server without any extra configuration. both
+// spellings are listed: the page sends whichever one its address bar shows,
+// and vite prints the 127.0.0.1 one because it listens on that address.
+const devOrigin = "http://localhost:5173,http://127.0.0.1:5173"
 
 func main() {
 	// defaults come from the environment so a container needs no arguments,
@@ -30,9 +33,13 @@ func main() {
 	addr := flag.String("addr", defaultAddr(), "host:port to listen on ($PORT)")
 	static := flag.String("static", envOr("STATIC_DIR", "../client/dist"), "directory with the built web client ($STATIC_DIR)")
 	origins := flag.String("allowed-origins", envOr("ALLOWED_ORIGINS", devOrigin), "comma separated origins allowed to open sockets, on top of the host we are served from ($ALLOWED_ORIGINS)")
+	pprofAddr := flag.String("pprof", envOr("PPROF_ADDR", ""), "serve the go profiler on this address, e.g. localhost:6060; off when empty ($PPROF_ADDR)")
+	maxRooms := flag.Int("max-rooms", envInt("MAX_ROOMS", room.DefaultMaxRooms), "most rooms this process will run at once ($MAX_ROOMS)")
 	flag.Parse()
 
-	rooms := room.NewManager()
+	servePprof(*pprofAddr)
+
+	rooms := room.NewManager(*maxRooms)
 	defer rooms.CloseAll()
 
 	mux := http.NewServeMux()
@@ -160,6 +167,22 @@ func defaultAddr() string {
 		return ":" + port
 	}
 	return ":8080"
+}
+
+// envInt reads a whole number from the environment. a value that does not
+// parse falls back to def with a warning rather than stopping the server: a
+// typo in a variable should not cost the whole deployment.
+func envInt(key string, def int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("warning: $%s=%q is not a number, using %d", key, raw, def)
+		return def
+	}
+	return v
 }
 
 // envOr reads a setting from the environment, falling back to def.

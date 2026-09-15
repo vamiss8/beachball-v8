@@ -11,6 +11,17 @@ import "time"
 const (
 	TickRate     = 60
 	TickDuration = time.Second / TickRate
+
+	// the simulation runs every tick, but a snapshot goes out only every this
+	// many. under load, writing to sockets was the largest single cost the
+	// server had: one system call per player per snapshot. halving how often
+	// that happens halves the cost, the encoding and every player's download,
+	// while clients draw other players a hundred milliseconds in the past and
+	// interpolate by tick number, so a two tick gap between snapshots is well
+	// inside what they already smooth over. set it to 1 to go back to sending
+	// every tick
+	SnapshotEveryTicks = 2
+	SnapshotRate       = TickRate / SnapshotEveryTicks
 )
 
 // arena geometry in game units. the client scales these to its canvas size,

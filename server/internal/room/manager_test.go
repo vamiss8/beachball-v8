@@ -8,7 +8,7 @@ import (
 )
 
 func TestJoinOpensAFreshRoomForAnEmptyCode(t *testing.T) {
-	m := NewManager()
+	m := NewManager(DefaultMaxRooms)
 	defer m.CloseAll()
 
 	first, err := m.Join("")
@@ -29,7 +29,7 @@ func TestJoinOpensAFreshRoomForAnEmptyCode(t *testing.T) {
 }
 
 func TestJoinReusesARoomByItsCode(t *testing.T) {
-	m := NewManager()
+	m := NewManager(DefaultMaxRooms)
 	defer m.CloseAll()
 
 	host, err := m.Join("")
@@ -53,7 +53,7 @@ func TestJoinReusesARoomByItsCode(t *testing.T) {
 }
 
 func TestJoinRejectsCodesThatCouldNotHaveBeenIssued(t *testing.T) {
-	m := NewManager()
+	m := NewManager(DefaultMaxRooms)
 	defer m.CloseAll()
 
 	for _, bad := range []string{"ABC", "ABCDE", "ABC0", "../.", "%%%%"} {
@@ -68,7 +68,7 @@ func TestJoinRejectsCodesThatCouldNotHaveBeenIssued(t *testing.T) {
 }
 
 func TestForgetDropsARoomFromTheRegistry(t *testing.T) {
-	m := NewManager()
+	m := NewManager(DefaultMaxRooms)
 	defer m.CloseAll()
 
 	first, err := m.Join("")
@@ -114,5 +114,35 @@ func TestRoomClosesOnlyAfterTheGracePeriod(t *testing.T) {
 	r.emptySince = time.Now().Add(-EmptyRoomTTL - time.Second)
 	if !r.idleTooLong() {
 		t.Fatal("room stayed open past its grace period")
+	}
+}
+
+func TestJoinRefusesRoomsPastTheCap(t *testing.T) {
+	// a cap of two, which a configurable limit finally makes cheap to test:
+	// the default would need five hundred live rooms, goroutines and all
+	m := NewManager(2)
+	defer m.CloseAll()
+
+	for i := 0; i < 2; i++ {
+		if _, err := m.Join(""); err != nil {
+			t.Fatalf("room %d: %v", i+1, err)
+		}
+	}
+
+	if _, err := m.Join(""); !errors.Is(err, ErrTooManyRooms) {
+		t.Fatalf("third room error = %v, want ErrTooManyRooms", err)
+	}
+	// an existing room is still joinable at the cap: the limit is on
+	// simulations, not on people
+	if m.count() != 2 {
+		t.Fatalf("live rooms = %d, want 2", m.count())
+	}
+}
+
+func TestNonPositiveCapFallsBackToTheDefault(t *testing.T) {
+	for _, n := range []int{0, -1} {
+		if got := NewManager(n).maxRooms; got != DefaultMaxRooms {
+			t.Errorf("NewManager(%d).maxRooms = %d, want %d", n, got, DefaultMaxRooms)
+		}
 	}
 }
