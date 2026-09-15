@@ -153,11 +153,22 @@ type Lobby struct {
 // handled by the browser itself and never surface in javascript, so a client
 // has no way to time them.
 
-// Encode wraps a payload in an envelope and marshals it.
+// Encode wraps a payload in an envelope and marshals both in a single pass.
+//
+// it used to marshal the payload first and then marshal an Envelope holding
+// those bytes. encoding/json does not pass a json.RawMessage through as it is:
+// it re-validates and compacts every byte. with a snapshot going out for every
+// room on every tick, that second pass over bytes the server had written a
+// moment earlier was about a tenth of all its cpu under load.
 func Encode(msgType string, payload any) ([]byte, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(Envelope{Type: msgType, Data: data})
+	return json.Marshal(outgoing{Type: msgType, Data: payload})
+}
+
+// outgoing is the envelope as the server writes it. it differs from Envelope,
+// which is the reading side, only in holding the payload as a value to be
+// encoded rather than as bytes already encoded. the field order is part of the
+// wire format: type comes first, so a reader can dispatch on the leading bytes.
+type outgoing struct {
+	Type string `json:"type"`
+	Data any    `json:"data,omitempty"`
 }
