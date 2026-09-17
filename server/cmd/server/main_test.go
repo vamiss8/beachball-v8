@@ -106,3 +106,15 @@ func TestDefaultAddrFollowsThePlatformPort(t *testing.T) {
 		t.Fatalf("defaultAddr() without $PORT = %q, want %q", got, ":8080")
 	}
 }
+
+func TestDevOriginAllowsBothLoopbackSpellings(t *testing.T) {
+	// vite prints and listens on 127.0.0.1, but people type localhost; the
+	// page sends whichever its address bar shows, and either must connect
+	allowed := parseOrigins(devOrigin)
+
+	for _, origin := range []string{"http://localhost:5173", "http://127.0.0.1:5173"} {
+		if !allowed[origin] {
+			t.Errorf("dev origin %q is not allowed by default", origin)
+		}
+	}
+}
