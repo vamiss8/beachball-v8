@@ -25,11 +25,12 @@ Every snapshot overrules that prediction.
 ```
 browser                          server (Go)
   input ──── {"type":"input"} ───────►  room.Client
-                                          │
+         60/sec, one per tick             │
                                           ▼
                                        game.World.Step()   60 times/sec
                                           │
   render ◄─── {"type":"state"} ──────────┘
+         30/sec, every second tick
 ```
 
 I started with physics on the client, using p2-es, and dropped it. Two browsers
@@ -120,7 +121,7 @@ uses, so an image runs with no arguments at all.
 | ---- | -------- | ------- | ------------ |
 | `-addr` | `PORT` | `:8080` | listen address; `PORT` is a number, since that is how hosting platforms hand one over |
 | `-static` | `STATIC_DIR` | `../client/dist` | directory with the built client |
-| `-allowed-origins` | `ALLOWED_ORIGINS` | `http://localhost:5173` | comma separated origins allowed to open sockets, on top of the host we are served from |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | both dev spellings | comma separated origins allowed to open sockets, on top of the host we are served from; defaults to `http://localhost:5173` and `http://127.0.0.1:5173` |
 | `-max-rooms` | `MAX_ROOMS` | `500` | most matches one process runs at once; set it to what your machine holds, see Performance |
 | `-pprof` | `PPROF_ADDR` | off | serve the go profiler here, e.g. `localhost:6060`; never on the game port |
 
@@ -360,11 +361,12 @@ winner serves. First to 15.
 ```
 браузер                          сервер (Go)
   ввод  ──── {"type":"input"} ───────►  room.Client
-                                          │
+         60/сек, по одному на тик         │
                                           ▼
                                        game.World.Step()   60 раз/сек
                                           │
   рендер ◄─── {"type":"state"} ──────────┘
+         30/сек, раз в два тика
 ```
 
 Начинал я с физики на клиенте, на p2-es. Отказался: два браузера расходятся
@@ -454,7 +456,7 @@ go run ./cmd/server
 | ---- | ---------- | ------------ | ----- |
 | `-addr` | `PORT` | `:8080` | адрес прослушивания; в `PORT` лежит число, потому что именно так его выдают хостинги |
 | `-static` | `STATIC_DIR` | `../client/dist` | папка со сборкой клиента |
-| `-allowed-origins` | `ALLOWED_ORIGINS` | `http://localhost:5173` | origin'ы через запятую, которым разрешено открывать сокет, вдобавок к хосту, с которого отдана страница |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | обе записи dev-адреса | origin'ы через запятую, которым разрешено открывать сокет, вдобавок к хосту, с которого отдана страница; по умолчанию `http://localhost:5173` и `http://127.0.0.1:5173` |
 | `-max-rooms` | `MAX_ROOMS` | `500` | сколько матчей один процесс держит одновременно; ставь столько, сколько тянет машина, см. «Производительность» |
 | `-pprof` | `PPROF_ADDR` | выкл. | отдавать профилировщик go на этом адресе, например `localhost:6060`; никогда не на игровом порту |
 
