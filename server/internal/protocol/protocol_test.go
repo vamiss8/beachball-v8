@@ -97,6 +97,6 @@ func BenchmarkEncodeState(b *testing.B) {
 	}
 
 	// reported after the loop: ResetTimer clears custom metrics, and this is
-	// the number every client downloads sixty times a second
+	// the number every client downloads thirty times a second
 	b.ReportMetric(float64(size), "bytes/snapshot")
 }

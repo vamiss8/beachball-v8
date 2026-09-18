@@ -25,7 +25,7 @@ const (
 
 var (
 	// messages are told apart by their first bytes. the server always writes
-	// the type first, and decoding a whole snapshot sixty times a second per
+	// the type first, and decoding a whole snapshot thirty times a second per
 	// player just to read its type would make the load test the bottleneck
 	stateTag = []byte(`{"type":"state"`)
 	pongTag  = []byte(`{"type":"pong"`)
