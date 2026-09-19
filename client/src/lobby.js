@@ -37,6 +37,13 @@ export class LobbyPanel {
     });
   }
 
+  // setNameLimit caps the input at what the server will actually keep. it
+  // cuts a longer name silently, and a box that let someone type past the
+  // limit would lose the end of what they typed with no hint why
+  setNameLimit(chars) {
+    if (chars > 0) this.nameInput.maxLength = chars;
+  }
+
   publish() {
     this.onChange({ name: this.nameInput.value, ready: this.ready });
   }

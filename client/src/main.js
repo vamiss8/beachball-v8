@@ -50,6 +50,7 @@ const connection = new Connection({
     view.playerId = welcome.playerId;
     view.spectator = welcome.spectator;
     view.pointsToWin = welcome.arena.pointsToWin;
+    lobby.setNameLimit(welcome.arena.maxNameLength);
 
     // the server names the room, including when it opened a fresh one for us
     roomBar.show(welcome.roomId);

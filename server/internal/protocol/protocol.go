@@ -29,7 +29,9 @@ type Envelope struct {
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
-// Arena tells the client the fixed dimensions it should scale its canvas to.
+// Arena is what stays fixed for the whole match: the dimensions the client
+// scales its canvas to, plus the few settings its own screens need before a
+// single snapshot has arrived.
 type Arena struct {
 	Width     float64 `json:"width"`
 	Height    float64 `json:"height"`
@@ -43,7 +45,10 @@ type Arena struct {
 	PlayerHeight float64 `json:"playerHeight"`
 
 	PointsToWin int `json:"pointsToWin"`
-	TickRate    int `json:"tickRate"`
+	// the longest name the server keeps. sent so the lobby can stop typing
+	// there, instead of letting someone fill a box the server then cuts
+	MaxNameLength int `json:"maxNameLength"`
+	TickRate      int `json:"tickRate"`
 	// how many snapshots a second actually arrive. lower than the tick rate,
 	// see game.SnapshotEveryTicks; a client only needs it to know what an on
 	// time snapshot looks like
@@ -100,18 +105,19 @@ func CurrentTuning() Tuning {
 // CurrentArena reports the arena the server is actually simulating.
 func CurrentArena() Arena {
 	return Arena{
-		Width:        game.ArenaWidth,
-		Height:       game.ArenaHeight,
-		GroundY:      game.GroundY,
-		NetX:         game.NetX,
-		NetY:         game.NetY,
-		NetWidth:     game.NetWidth,
-		NetHeight:    game.NetHeight,
-		PlayerWidth:  game.PlayerWidth,
-		PlayerHeight: game.PlayerHeight,
-		PointsToWin:  game.PointsToWin,
-		TickRate:     game.TickRate,
-		SnapshotRate: game.SnapshotRate,
+		Width:         game.ArenaWidth,
+		Height:        game.ArenaHeight,
+		GroundY:       game.GroundY,
+		NetX:          game.NetX,
+		NetY:          game.NetY,
+		NetWidth:      game.NetWidth,
+		NetHeight:     game.NetHeight,
+		PlayerWidth:   game.PlayerWidth,
+		PlayerHeight:  game.PlayerHeight,
+		PointsToWin:   game.PointsToWin,
+		MaxNameLength: game.MaxNameLength,
+		TickRate:      game.TickRate,
+		SnapshotRate:  game.SnapshotRate,
 	}
 }
 
