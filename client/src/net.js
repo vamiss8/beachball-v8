@@ -171,7 +171,7 @@ export class Connection {
     this.socket.send(JSON.stringify({ type: 'input', data: input }));
   }
 
-  // sendLobby reports the name and readiness. also deduplicated, since typing
+  // sendLobby reports the name and readiness. deduplicated, since typing
   // a name fires an event per keystroke, but remembered so a reconnect can
   // restore what the player had already chosen
   sendLobby(state) {

@@ -131,7 +131,10 @@ type State struct {
 	World *game.World `json:"world"`
 }
 
-// Input carries the key state, sent whenever it changes.
+// Input carries the key state for one tick. the client sends one every tick
+// whether the keys changed or not, because the server spends exactly one per
+// tick: anything else and the two sides hold the same keys for a different
+// number of ticks.
 //
 // Seq numbers each input a client sends. the server echoes the last one it
 // applied back in the snapshot, which is how a client predicting its own

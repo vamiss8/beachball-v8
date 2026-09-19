@@ -79,9 +79,9 @@ func TestEncodedTypeComesFirst(t *testing.T) {
 	}
 }
 
-// BenchmarkEncodeState is the other half of a room's cost per tick: the
-// snapshot is marshalled once per room per tick and the same bytes go to
-// every client.
+// BenchmarkEncodeState is the other half of a room's cost: the snapshot is
+// marshalled once per room every game.SnapshotEveryTicks ticks, and the same
+// bytes go to every client.
 func BenchmarkEncodeState(b *testing.B) {
 	w := liveWorld()
 

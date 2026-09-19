@@ -8,9 +8,9 @@ import (
 // histogram counts durations into fixed-width buckets.
 //
 // every simulated player records into the same histogram at once, so it is
-// built from atomics rather than a mutex: sixty samples a second from a
-// thousand players is sixty thousand increments, and a lock taken for each of
-// them would measure the load test's own contention instead of the server.
+// built from atomics rather than a mutex: thirty samples a second from a
+// thousand players is thirty thousand increments, and a lock taken for each
+// of them would measure the load test's own contention instead of the server.
 // fixed buckets also make percentiles exact to the bucket width without ever
 // storing the samples themselves.
 type histogram struct {
