@@ -70,7 +70,7 @@ spawning:
 	}
 
 	wg.Wait()
-	report(m, *rooms, *duration)
+	report(m, *rooms, *duration, ctx.Err() == nil)
 }
 
 // openRoom seats a host, then sends the guest after them into the same code,
@@ -97,7 +97,7 @@ func openRoom(ctx context.Context, target string, i int, m *metrics, win window)
 	wg.Wait()
 }
 
-func report(m *metrics, rooms int, duration time.Duration) {
+func report(m *metrics, rooms int, duration time.Duration, complete bool) {
 	players := int64(rooms * 2)
 	connected := m.connected.Load()
 	seconds := duration.Seconds()
@@ -132,6 +132,16 @@ func report(m *metrics, rooms int, duration time.Duration) {
 	fmt.Printf("ping rtt        p50 %s  p99 %s  max %s\n",
 		ms(m.rtts.percentile(0.50)), ms(m.rtts.percentile(0.99)), ms(time.Duration(m.rtts.max.Load())))
 	fmt.Printf("downstream      %.1f KB/s per player\n", down)
+
+	if !complete {
+		// everything above is divided by a window that never finished, so it
+		// understates a server that was keeping up fine. a run cut short
+		// proves nothing either way, and a verdict printed anyway is exactly
+		// the kind of number that gets quoted later as if it did
+		fmt.Println()
+		fmt.Println("interrupted before the window closed, no verdict")
+		return
+	}
 
 	// held means a player could not tell this server from an idle one: the
 	// snapshot rate within two percent of target, nobody dropped, nobody
