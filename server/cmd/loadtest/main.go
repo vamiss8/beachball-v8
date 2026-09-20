@@ -2,10 +2,10 @@
 // reports whether it kept up.
 //
 // every room gets two players who ready up and then play the way a browser
-// does: one numbered input per tick and a ping every second. what comes back
-// is judged by the only measure a player would notice, which is whether
-// snapshots keep arriving as often as the server says they will, evenly,
-// without anyone being dropped.
+// does: one numbered input per tick and a ping every couple of seconds. what
+// comes back is judged by the only measure a player would notice, which is
+// whether snapshots keep arriving as often as the server says they will,
+// evenly, without anyone being dropped.
 package main
 
 import (

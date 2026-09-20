@@ -19,7 +19,10 @@ const (
 	tickRate     = 60
 	tickInterval = time.Second / tickRate
 
-	pingInterval = time.Second
+	// the gap the browser client uses, PING_INTERVAL_MS in net.js. pinging
+	// more often would put work on the server that no real player asks for,
+	// and report a round trip nobody is waiting on
+	pingInterval = 2 * time.Second
 	writeWait    = 5 * time.Second
 )
 
@@ -59,7 +62,8 @@ type window struct {
 func (w window) contains(t time.Time) bool { return !t.Before(w.from) && t.Before(w.to) }
 
 // bot is one simulated player: it joins a room, readies up, and then behaves
-// like a real browser tab. one numbered input every tick, a ping every second.
+// like a real browser tab: one numbered input every tick, a ping every couple
+// of seconds.
 type bot struct {
 	url  string
 	name string
