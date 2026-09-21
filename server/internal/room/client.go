@@ -3,6 +3,7 @@ package room
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"beachball-v8/server/internal/game"
@@ -44,7 +45,8 @@ type Client struct {
 	// touched only by readPump, which is the only goroutine answering pings
 	lastPingReply time.Time
 
-	closed chan struct{}
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 // Serve attaches an upgraded connection to the room and blocks until the
@@ -81,14 +83,18 @@ func (c *Client) trySend(msg []byte) bool {
 	}
 }
 
-// close signals both pumps to wind down. safe to call more than once.
+// close signals both pumps to wind down. safe to call more than once, and
+// from several goroutines at once: both pumps call it on their way out and
+// the room calls it on a client that fell behind.
+//
+// a sync.Once rather than checking whether closed is already closed: two
+// callers could both see it open and both close it, and the second close
+// panics, which takes down the whole server rather than one connection.
 func (c *Client) close() {
-	select {
-	case <-c.closed:
-	default:
+	c.closeOnce.Do(func() {
 		close(c.closed)
 		c.conn.Close()
-	}
+	})
 }
 
 func (c *Client) describe() string {
