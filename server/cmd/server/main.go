@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -28,6 +29,15 @@ import (
 const devOrigin = "http://localhost:5173,http://127.0.0.1:5173"
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run is the whole server. it returns an error instead of exiting, so every
+// defer in here runs whichever way the server stops, and main stays the one
+// place that ends the process.
+func run() error {
 	// defaults come from the environment so a container needs no arguments,
 	// and flags still win when one is passed
 	addr := flag.String("addr", defaultAddr(), "host:port to listen on ($PORT)")
@@ -67,24 +77,38 @@ func main() {
 		log.Printf("warning: static dir %q does not exist, the client will 404 until it is built", *static)
 	}
 
+	// ctrl-c, or the SIGTERM a platform sends before replacing us
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// the listener has to run in a goroutine of its own, but a failure there,
+	// like a port that is already taken, comes back here to end the server
+	// rather than exiting from inside the goroutine and skipping every defer
+	listenErr := make(chan error, 1)
 	go func() {
 		log.Printf("server listening on %s (static: %s)", *addr, *static)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %v", err)
-		}
+		listenErr <- srv.ListenAndServe()
 	}()
 
-	// wait for ctrl-c, then let in-flight requests finish
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-
-	log.Println("shutting down")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown: %v", err)
+	select {
+	case err := <-listenErr:
+		return fmt.Errorf("listen: %w", err)
+	case <-ctx.Done():
 	}
+
+	// the signal has done its job. handing it back to the default means a
+	// second ctrl-c during a slow shutdown ends the process on the spot
+	// instead of being swallowed
+	stop()
+
+	// let in-flight requests finish, but not forever
+	log.Println("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	return nil
 }
 
 // wsHandler upgrades a request and hands the connection to the room named in
