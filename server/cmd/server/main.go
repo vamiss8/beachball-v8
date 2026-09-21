@@ -97,6 +97,20 @@ func wsHandler(rooms *room.Manager, allowed map[string]bool) http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, req *http.Request) {
+		// everything that can refuse the request goes before Join, because
+		// Join may open a fresh room, and a request turned away after that
+		// leaves the room sitting empty for its whole grace period. a few
+		// hundred plain page loads of /ws would fill the cap that way and
+		// lock real players out for a minute
+		if !websocket.IsWebSocketUpgrade(req) {
+			http.Error(w, "this endpoint only speaks websocket", http.StatusBadRequest)
+			return
+		}
+		if !upgrader.CheckOrigin(req) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+
 		// resolved before the upgrade, so a bad code gets a plain http error
 		// the browser can actually show instead of an instant socket close
 		rm, err := rooms.Join(req.URL.Query().Get("room"))

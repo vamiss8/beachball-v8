@@ -103,8 +103,10 @@ jobs:
         run: |
           curl -sf http://localhost:8080/healthz >/dev/null
           curl -sf http://localhost:8080/ | grep -q '<canvas id="game">'
-          # a code the server could never have issued must be refused
-          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8080/ws?room=ABC0')" = "400"
+          # a code the server could never have issued must be refused. sent as a
+          # websocket upgrade: a plain get is turned away earlier, before the
+          # code is even looked at, and would pass this check for the wrong reason
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' 'http://localhost:8080/ws?room=ABC0')" = "400"
 
       - name: stop
         if: always()
