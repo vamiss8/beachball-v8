@@ -44,6 +44,13 @@ jobs:
         # room goroutine owning state that pumps and the manager touch
         run: go test -race ./...
 
+      - name: benchmarks
+        working-directory: server
+        # the test step compiles them but never runs them, so a benchmark that
+        # panics would stay green until someone measured by hand. one pass each
+        # proves they still work; the numbers from a shared runner mean nothing
+        run: go test -run '^$' -bench . -benchtime 1x ./...
+
       - name: gofmt
         working-directory: server
         # gofmt has no failing exit code of its own, so an empty listing is
