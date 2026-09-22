@@ -3,6 +3,7 @@ package room
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -49,6 +50,53 @@ func TestJoinReusesARoomByItsCode(t *testing.T) {
 	}
 	if m.count() != 1 {
 		t.Fatalf("live rooms = %d, want 1", m.count())
+	}
+}
+
+func TestSimultaneousJoinsOfANewCodeShareOneRoom(t *testing.T) {
+	// a well-formed code nobody has opened yet, which is what an old invite
+	// link looks like after a restart, followed by several people at once. if
+	// the lookup and the insert could interleave, two of them would each open
+	// a room under the same name, the second would replace the first in the
+	// map, and two friends would sit in separate matches waiting for each
+	// other.
+	//
+	// one round almost never shows it: a goroutine that has just let go of a
+	// lock usually takes it straight back before the others wake up. so it
+	// is tried on many fresh managers, which catches a lock released between
+	// the two steps on every run
+	const code = "ABCD"
+	const rounds = 500
+	const joiners = 8
+
+	for round := 0; round < rounds; round++ {
+		m := NewManager(DefaultMaxRooms)
+
+		rooms := make([]*Room, joiners)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := 0; i < joiners; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				r, err := m.Join(code)
+				if err != nil {
+					t.Errorf("Join(%q): %v", code, err)
+					return
+				}
+				rooms[i] = r
+			}()
+		}
+		close(start)
+		wg.Wait()
+		m.CloseAll()
+
+		for i, r := range rooms {
+			if r != rooms[0] {
+				t.Fatalf("round %d: joiner %d landed in a different room from joiner 0", round, i)
+			}
+		}
 	}
 }
 
