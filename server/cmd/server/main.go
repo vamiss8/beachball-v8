@@ -7,7 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,7 +30,8 @@ const devOrigin = "http://localhost:5173,http://127.0.0.1:5173"
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "err", err)
+		os.Exit(1)
 	}
 }
 
@@ -74,7 +75,7 @@ func run() error {
 	// said once at startup rather than left to be discovered by whoever opens
 	// the page first and gets a 404 with no idea the path is simply wrong
 	if _, err := os.Stat(*static); errors.Is(err, os.ErrNotExist) {
-		log.Printf("warning: static dir %q does not exist, the client will 404 until it is built", *static)
+		slog.Warn("static dir does not exist, the client will 404 until it is built", "dir", *static)
 	}
 
 	// ctrl-c, or the SIGTERM a platform sends before replacing us
@@ -86,7 +87,7 @@ func run() error {
 	// rather than exiting from inside the goroutine and skipping every defer
 	listenErr := make(chan error, 1)
 	go func() {
-		log.Printf("server listening on %s (static: %s)", *addr, *static)
+		slog.Info("server listening", "addr", *addr, "static", *static)
 		listenErr <- srv.ListenAndServe()
 	}()
 
@@ -102,7 +103,7 @@ func run() error {
 	stop()
 
 	// let in-flight requests finish, but not forever
-	log.Println("shutting down")
+	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -143,7 +144,7 @@ func wsHandler(rooms *room.Manager, allowed map[string]bool) http.HandlerFunc {
 			if errors.Is(err, room.ErrBadCode) {
 				status = http.StatusBadRequest
 			}
-			log.Printf("join failed for %s: %v", req.RemoteAddr, err)
+			slog.Warn("join failed", "remote", req.RemoteAddr, "err", err)
 			http.Error(w, err.Error(), status)
 			return
 		}
@@ -152,7 +153,7 @@ func wsHandler(rooms *room.Manager, allowed map[string]bool) http.HandlerFunc {
 		if err != nil {
 			// upgrade failures are per-request problems, never fatal:
 			// one bad client must not take the whole server down
-			log.Printf("upgrade failed for %s: %v", req.RemoteAddr, err)
+			slog.Warn("upgrade failed", "remote", req.RemoteAddr, "err", err)
 			return
 		}
 		rm.Serve(conn)
@@ -217,7 +218,7 @@ func envInt(key string, def int) int {
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("warning: $%s=%q is not a number, using %d", key, raw, def)
+		slog.Warn("setting is not a number, using the default", "key", key, "value", raw, "default", def)
 		return def
 	}
 	return v

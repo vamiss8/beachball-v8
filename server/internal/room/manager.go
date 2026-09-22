@@ -2,7 +2,7 @@ package room
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -115,7 +115,9 @@ func (m *Manager) insert(code string) (*Room, error) {
 
 	r := newRoom(code, m.forget)
 	m.rooms[code] = r
-	log.Printf("room %s: opened (%d live)", code, len(m.rooms))
+	// every line about a match carries its code under the same key, so one
+	// match's whole story comes out of the log with a single room=CODE filter
+	slog.Info("room opened", "room", code, "live", len(m.rooms))
 	return r, nil
 }
 

@@ -3,7 +3,7 @@
 package room
 
 import (
-	"log"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -193,7 +193,7 @@ func (r *Room) shutdown() {
 		r.onEmpty(r.ID)
 	}
 	r.Close()
-	log.Printf("room %s: closed after %s empty", r.ID, EmptyRoomTTL)
+	slog.Info("room closed", "room", r.ID, "empty_for", EmptyRoomTTL)
 }
 
 // add seats a new client, as a player if a side is free and as a spectator
@@ -218,12 +218,12 @@ func (r *Room) add(c *Client) {
 		Tuning:    protocol.CurrentTuning(),
 	})
 	if err != nil {
-		log.Printf("room %s: encode welcome: %v", r.ID, err)
+		slog.Error("encode welcome", "room", r.ID, "err", err)
 		return
 	}
 	c.trySend(msg)
 
-	log.Printf("room %s: %s joined (spectator=%v)", r.ID, c.describe(), c.spectator)
+	slog.Info("client joined", "room", r.ID, "client", c.describe(), "spectator", c.spectator)
 }
 
 // remove drops a client and frees its side for the next joiner.
@@ -238,7 +238,7 @@ func (r *Room) remove(c *Client) {
 		r.world.RemovePlayer(c.playerID)
 		delete(r.pending, c.playerID)
 	}
-	log.Printf("room %s: %s left", r.ID, c.describe())
+	slog.Info("client left", "room", r.ID, "client", c.describe())
 }
 
 // freeSide finds an unoccupied half of the court.
@@ -262,7 +262,7 @@ func (r *Room) newPlayerID() string {
 func (r *Room) broadcastState() {
 	msg, err := protocol.Encode(protocol.TypeState, protocol.State{World: r.world})
 	if err != nil {
-		log.Printf("room %s: encode state: %v", r.ID, err)
+		slog.Error("encode state", "room", r.ID, "err", err)
 		return
 	}
 	for c := range r.clients {

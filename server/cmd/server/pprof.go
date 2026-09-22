@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"time"
@@ -36,10 +36,10 @@ func servePprof(addr string) {
 	}
 
 	go func() {
-		log.Printf("pprof listening on %s", addr)
+		slog.Info("pprof listening", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			// a profiler that cannot bind is not a reason to take the game down
-			log.Printf("pprof: %v", err)
+			slog.Error("pprof stopped", "err", err)
 		}
 	}()
 }

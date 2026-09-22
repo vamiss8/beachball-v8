@@ -2,7 +2,7 @@ package room
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -130,7 +130,7 @@ func (c *Client) readPump() {
 				websocket.CloseGoingAway,
 				websocket.CloseNormalClosure,
 				websocket.CloseNoStatusReceived) {
-				log.Printf("room %s: read error from %s: %v", c.room.ID, c.describe(), err)
+				slog.Warn("read error", "room", c.room.ID, "client", c.describe(), "err", err)
 			}
 			return
 		}
