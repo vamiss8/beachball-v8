@@ -5,11 +5,13 @@
 // the client deliberately renders slightly in the past and blends between the
 // two snapshots surrounding that moment.
 
-// how far behind the newest snapshot we render. snapshots arrive every second
-// tick, so six ticks is three of them: enough to ride out normal jitter and a
-// whole lost snapshot. your own player is predicted rather than drawn from
-// here, so this delay only ever applies to the ball and the other side
-const DELAY_TICKS = 6;
+// how far behind the newest snapshot we render, counted in snapshots: enough
+// to ride out normal jitter and a whole lost one. counted in snapshots rather
+// than ticks because how many ticks lie between two of them is the server's
+// call, and a fixed tick count would quietly shrink the margin the moment the
+// server sent them less often. your own player is predicted rather than drawn
+// from here, so this delay only ever applies to the ball and the other side
+const DELAY_SNAPSHOTS = 3;
 
 // snapshots older than this are useless, keep the buffer bounded
 const MAX_SNAPSHOTS = 60;
@@ -24,8 +26,11 @@ const CLOCK_CORRECTION = 0.08;
 const RESYNC_THRESHOLD_TICKS = 30;
 
 export class SnapshotBuffer {
-  constructor(tickRate) {
+  constructor(tickRate, snapshotRate) {
     this.tickRate = tickRate;
+    // a server that does not say is taken to send one every tick
+    const ticksPerSnapshot = snapshotRate > 0 ? tickRate / snapshotRate : 1;
+    this.delayTicks = DELAY_SNAPSHOTS * ticksPerSnapshot;
     this.snapshots = [];
     this.renderTick = null;
   }
@@ -52,7 +57,7 @@ export class SnapshotBuffer {
 
     const newest = this.snapshots[this.snapshots.length - 1];
     const oldest = this.snapshots[0];
-    const target = newest.tick - DELAY_TICKS;
+    const target = newest.tick - this.delayTicks;
 
     if (this.renderTick === null || Math.abs(target - this.renderTick) > RESYNC_THRESHOLD_TICKS) {
       this.renderTick = target;

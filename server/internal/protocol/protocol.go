@@ -50,8 +50,8 @@ type Arena struct {
 	MaxNameLength int `json:"maxNameLength"`
 	TickRate      int `json:"tickRate"`
 	// how many snapshots a second actually arrive. lower than the tick rate,
-	// see game.SnapshotEveryTicks; a client only needs it to know what an on
-	// time snapshot looks like
+	// see game.SnapshotEveryTicks; a client needs it to know how far behind
+	// to render and what an on time snapshot looks like
 	SnapshotRate int `json:"snapshotRate"`
 }
 

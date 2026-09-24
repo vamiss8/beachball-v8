@@ -58,7 +58,7 @@ const connection = new Connection({
     // rebuilt only once: arena never changes, and a fresh Renderer on
     // every reconnect would stack up another resize listener each time
     renderer ??= new Renderer(canvas, welcome.arena);
-    buffer = new SnapshotBuffer(welcome.arena.tickRate);
+    buffer = new SnapshotBuffer(welcome.arena.tickRate, welcome.arena.snapshotRate);
 
     // spectators have no player of their own to predict
     prediction = welcome.spectator ? null : new Prediction(welcome.arena, welcome.tuning);
