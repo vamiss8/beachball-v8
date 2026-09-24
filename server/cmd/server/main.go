@@ -43,7 +43,7 @@ func run() error {
 	// and flags still win when one is passed
 	addr := flag.String("addr", defaultAddr(), "host:port to listen on ($PORT)")
 	static := flag.String("static", envOr("STATIC_DIR", "../client/dist"), "directory with the built web client ($STATIC_DIR)")
-	origins := flag.String("allowed-origins", envOr("ALLOWED_ORIGINS", devOrigin), "comma separated origins allowed to open sockets, on top of the host we are served from ($ALLOWED_ORIGINS)")
+	origins := flag.String("allowed-origins", lookupEnvOr("ALLOWED_ORIGINS", devOrigin), "comma separated origins allowed to open sockets, on top of the host we are served from ($ALLOWED_ORIGINS)")
 	pprofAddr := flag.String("pprof", envOr("PPROF_ADDR", ""), "serve the go profiler on this address, e.g. localhost:6060; off when empty ($PPROF_ADDR)")
 	maxRooms := flag.Int("max-rooms", envInt("MAX_ROOMS", room.DefaultMaxRooms), "most rooms this process will run at once ($MAX_ROOMS)")
 	flag.Parse()
@@ -222,6 +222,17 @@ func envInt(key string, def int) int {
 		return def
 	}
 	return v
+}
+
+// lookupEnvOr is envOr for a setting where empty is a real answer. an origin
+// list set to nothing means no origins beyond our own host, and reading it
+// as unset would bring the dev defaults back with no way to switch them off
+// from the environment at all.
+func lookupEnvOr(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return def
 }
 
 // envOr reads a setting from the environment, falling back to def.

@@ -53,9 +53,12 @@ COPY --from=server /out/beachball /app/beachball
 COPY --from=client /src/client/dist /app/client
 
 # the defaults a container needs, so it runs with no arguments at all. a host
-# that assigns a port overrides PORT, and ALLOWED_ORIGINS is only needed when
-# a proxy rewrites the Host header
-ENV STATIC_DIR=/app/client
+# that assigns a port overrides PORT. ALLOWED_ORIGINS is set empty rather than
+# left out: unset means the vite dev server's origins, and there is no dev
+# server in production. a proxy that rewrites the Host header sets it to the
+# public origin instead
+ENV STATIC_DIR=/app/client \
+    ALLOWED_ORIGINS=""
 EXPOSE 8080
 
 USER nonroot:nonroot

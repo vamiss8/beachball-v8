@@ -121,7 +121,7 @@ uses, so an image runs with no arguments at all.
 | ---- | -------- | ------- | ------------ |
 | `-addr` | `PORT` | `:8080` | listen address; `PORT` is a number, since that is how hosting platforms hand one over |
 | `-static` | `STATIC_DIR` | `../client/dist` | directory with the built client |
-| `-allowed-origins` | `ALLOWED_ORIGINS` | both dev spellings | comma separated origins allowed to open sockets, on top of the host we are served from; defaults to `http://localhost:5173` and `http://127.0.0.1:5173` |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | both dev spellings | comma separated origins allowed to open sockets, on top of the host we are served from; defaults to `http://localhost:5173` and `http://127.0.0.1:5173`, and set but empty means none, which is what the docker image uses |
 | `-max-rooms` | `MAX_ROOMS` | `500` | most matches one process runs at once; set it to what your machine holds, see Performance |
 | `-pprof` | `PPROF_ADDR` | off | serve the go profiler here, e.g. `localhost:6060`; never on the game port |
 
@@ -458,7 +458,7 @@ go run ./cmd/server
 | ---- | ---------- | ------------ | ----- |
 | `-addr` | `PORT` | `:8080` | адрес прослушивания; в `PORT` лежит число, потому что именно так его выдают хостинги |
 | `-static` | `STATIC_DIR` | `../client/dist` | папка со сборкой клиента |
-| `-allowed-origins` | `ALLOWED_ORIGINS` | обе записи dev-адреса | origin'ы через запятую, которым разрешено открывать сокет, вдобавок к хосту, с которого отдана страница; по умолчанию `http://localhost:5173` и `http://127.0.0.1:5173` |
+| `-allowed-origins` | `ALLOWED_ORIGINS` | обе записи dev-адреса | origin'ы через запятую, которым разрешено открывать сокет, вдобавок к хосту, с которого отдана страница; по умолчанию `http://localhost:5173` и `http://127.0.0.1:5173`, а заданная пустой — никаких, так и сделано в docker-образе |
 | `-max-rooms` | `MAX_ROOMS` | `500` | сколько матчей один процесс держит одновременно; ставь столько, сколько тянет машина, см. «Производительность» |
 | `-pprof` | `PPROF_ADDR` | выкл. | отдавать профилировщик go на этом адресе, например `localhost:6060`; никогда не на игровом порту |
 
