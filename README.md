@@ -282,7 +282,9 @@ next match always starts on purpose. The half-played score goes with it: nobody
 can finish that match, so the room you are left waiting in looks like one nobody
 has played in yet.
 
-Names are cut to 16 characters and stripped of control characters server-side.
+Names are cut to 16 characters and stripped of control and invisible
+formatting characters server-side, so a name can neither turn itself around
+nor be made of nothing.
 It is the only free text one player can put on another's screen, so none of it
 is taken on trust.
 
@@ -619,7 +621,9 @@ websocket есть свои ping-фреймы, но браузер отвеча�
 ней: доиграть тот матч всё равно некому, так что комната, в которой ты остался
 ждать, выглядит как та, где ещё никто не играл.
 
-Имя режется до 16 символов и чистится от управляющих на сервере. Это
+Имя режется до 16 символов и чистится на сервере от управляющих и невидимых
+символов форматирования, так что имя не может ни развернуться задом наперёд,
+ни состоять из пустоты. Это
 единственный свободный текст, который один игрок может показать другому, так что
 на слово ему не верят.
 

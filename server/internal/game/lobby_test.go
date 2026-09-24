@@ -145,6 +145,11 @@ func TestSanitizeName(t *testing.T) {
 		{"trimmed", "  spaced  ", "spaced"},
 		{"newlines dropped", "two\nlines", "twolines"},
 		{"tabs dropped", "a\tb", "ab"},
+		{"direction override dropped", "\u202eevil", "evil"},
+		{"direction isolates dropped", "\u2066abc\u2069", "abc"},
+		// the client only falls back to the colour for an empty name, so an
+		// invisible one has to come out empty rather than merely unreadable
+		{"invisible name comes out empty", "\u200b\u200b\u200b", ""},
 		{"empty stays empty", "   ", ""},
 		{"cut to the limit", long, strings.Repeat("a", MaxNameLength)},
 		{"no trailing space after the cut", strings.Repeat("b", MaxNameLength-1) + "  tail", strings.Repeat("b", MaxNameLength-1)},
