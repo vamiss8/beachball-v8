@@ -97,7 +97,7 @@ export class Renderer {
     if (world) {
       this.drawNet();
       // under everything, so a player standing on the spot covers their own
-      // patch of sand rather than the shadow floating over their feet
+      // patch of sand rather than the shadow floating over feet
       this.drawBallShadow(world.ball);
       for (const player of Object.values(world.players)) {
         this.drawPlayer(player, player.id === view.playerId);
