@@ -328,3 +328,5 @@ function text(ctx, value, x, y, size, align) {
   ctx.fillText(value, x, y);
   ctx.restore();
 }
+
+// :) 
