@@ -329,4 +329,3 @@ function text(ctx, value, x, y, size, align) {
   ctx.restore();
 }
 
-// :) 
