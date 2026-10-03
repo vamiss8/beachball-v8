@@ -25,6 +25,11 @@ export class Input {
       block: false,
     };
 
+    // the physical keys that are down right now. the key state above is
+    // derived from this rather than written by each event, because an action
+    // can sit on several keys at once
+    this.held = new Set();
+
     window.addEventListener('keydown', (e) => this.handle(e, true));
     window.addEventListener('keyup', (e) => this.handle(e, false));
     // a key held while the tab loses focus would otherwise stay stuck down
@@ -47,10 +52,24 @@ export class Input {
     event.preventDefault();
 
     if (event.repeat) return;
-    this.keys[action] = pressed;
+
+    if (pressed) {
+      this.held.add(event.code);
+    } else {
+      this.held.delete(event.code);
+    }
+
+    // on while any key bound to the action is down. writing the event straight
+    // into the state let a release of one key end an action another was still
+    // holding: walk with a, brush the left arrow, and the player stopped dead
+    // with a key still down and no new keydown coming to start them again
+    this.keys[action] = [...this.held].some((code) => BINDINGS[code] === action);
   }
 
   releaseAll() {
+    // the keys themselves are forgotten too: their keyups went to whatever
+    // took the focus, so nothing will ever arrive to clear them
+    this.held.clear();
     for (const action of Object.keys(this.keys)) {
       this.keys[action] = false;
     }
